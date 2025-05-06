@@ -11,8 +11,14 @@ logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Load environment variables
+# Load environment variables - using exact format from your code
 load_dotenv()
+api_key = os.getenv("OPENAI_API_KEY")
+base_url = os.getenv("OPENAI_BASE_URL")
+model_id = os.getenv("MODEL_ID")
+
+# Initialize OpenAI client
+client = OpenAI(api_key=api_key, base_url=base_url)
 
 # Configure static folder explicitly
 app = Flask(__name__, 
@@ -21,21 +27,9 @@ app = Flask(__name__,
             
 CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all routes
 
-# Get environment variables - using your exact naming convention
-api_key = os.getenv("OPEN_API_KEY", "")
-base_url = os.getenv("OPENAI_BASE_URL", "https://genai-sharedservice-americas.pwc.com")
-model_id = os.getenv("MODEL_ID", "bedrock.anthropic.claude-3-7-sonnet-v1")
-
 logger.info(f"Using API URL: {base_url}")
 logger.info(f"Using Model ID: {model_id}")
 logger.info(f"API Key configured: {'Yes' if api_key else 'No'}")
-
-# Initialize OpenAI client
-try:
-    client = OpenAI(api_key=api_key, base_url=base_url)
-    logger.info("OpenAI client initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize OpenAI client: {str(e)}")
 
 # Home page 
 @app.route('/')
@@ -64,11 +58,6 @@ def test_api():
 @app.route('/generate', methods=['POST'])
 def generate():
     try:
-        # Check if API key is properly set - note that some setups might not require a key
-        if not api_key and not base_url:
-            logger.error("Neither API key nor base URL found")
-            return jsonify({'error': 'API configuration not found. Please check your .env file.'}), 401
-            
         data = request.json
         logger.debug(f"Received data: {data}")
         
@@ -115,26 +104,20 @@ def generate():
         Optimize it for {device} view.
         """
         
-        logger.info("Sending request to Claude API...")
+        logger.info("Sending request to API...")
         
         # Send request to OpenAI
         try:
-            # Bedrock models might not support response_format
-            # Try without response_format first since you confirmed this is working
-            try:
-                response = client.chat.completions.create(
-                    model=model_id,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    max_tokens=4000
-                )
-            except Exception as e:
-                logger.error(f"API call failed: {str(e)}")
-                return jsonify({'error': f'API call failed: {str(e)}'}), 500
+            response = client.chat.completions.create(
+                model=model_id,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                max_tokens=4000
+            )
                 
-            logger.info("Received response from Claude API")
+            logger.info("Received response from API")
             
             # Extract the JSON content from the response
             try:
@@ -212,7 +195,7 @@ def generate():
                 return jsonify({'error': f'Content processing failed: {str(e)}'}), 500
                 
         except Exception as e:
-            logger.error(f"Error calling Claude API: {str(e)}")
+            logger.error(f"Error calling API: {str(e)}")
             return jsonify({'error': f'API call failed: {str(e)}'}), 500
             
     except Exception as e:
