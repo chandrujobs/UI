@@ -608,18 +608,21 @@
                     // Update Angular code
                     angularCode.textContent = data.angular;
                     
-                    // Render preview
-                    const blob = new Blob([data.html], { type: 'text/html' });
-                    const url = URL.createObjectURL(blob);
-                    
-                    const iframe = document.createElement('iframe');
-                    iframe.src = url;
-                    
-                    // Replace existing content
-                    previewContainer.innerHTML = '';
-                    previewContainer.appendChild(iframe);
-                    
-                    showStatus('UI generated successfully!', 'success');
+                    // Render preview with delay to improve performance
+                    setTimeout(() => {
+                        // Render preview
+                        const blob = new Blob([data.html], { type: 'text/html' });
+                        const url = URL.createObjectURL(blob);
+                        
+                        const iframe = document.createElement('iframe');
+                        iframe.src = url;
+                        
+                        // Replace existing content
+                        previewContainer.innerHTML = '';
+                        previewContainer.appendChild(iframe);
+                        
+                        showStatus('UI generated successfully!', 'success');
+                    }, 100);
                 })
                 .catch(error => {
                     console.error('Error generating UI:', error);
