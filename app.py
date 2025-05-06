@@ -21,10 +21,10 @@ app = Flask(__name__,
             
 CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all routes
 
-# Get environment variables - using your naming convention
+# Get environment variables - using your exact naming convention
 api_key = os.getenv("OPENAI_API_KEY")
 base_url = os.getenv("OPENAI_BASE_URL")
-model_id = os.getenv("MODEL_ID")
+model_id = os.getenv("MODEL_ID", "gpt-4o-mini")  # Default to gpt-4o-mini if not specified
 
 logger.info(f"Using API URL: {base_url}")
 logger.info(f"Using Model ID: {model_id}")
