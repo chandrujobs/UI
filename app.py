@@ -24,10 +24,17 @@ CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all routes
 # Get environment variables - using your exact naming convention
 api_key = os.getenv("OPENAI_API_KEY")
 base_url = os.getenv("OPENAI_BASE_URL")
-model_id = os.getenv("MODEL_ID", "gpt-4o-mini")  # Default to gpt-4o-mini if not specified
+
+# Model configuration - specify both shared service model and base model with fallbacks
+shared_service_model = os.getenv("SHARED_SERVICE_MODEL", "vertex.ai.anthropic.claude-3.7-sonnet")
+base_model = os.getenv("BASE_MODEL", "anthropic.claude-3-7-sonnet")
+
+# Use the shared service model as the primary model ID
+model_id = shared_service_model
 
 logger.info(f"Using API URL: {base_url}")
-logger.info(f"Using Model ID: {model_id}")
+logger.info(f"Using Shared Service Model: {shared_service_model}")
+logger.info(f"Base Model: {base_model}")
 logger.info(f"API Key configured: {'Yes' if api_key else 'No'}")
 
 # Initialize OpenAI client
