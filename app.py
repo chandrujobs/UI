@@ -60,6 +60,29 @@ def test_api():
         logger.error(f"API test failed: {str(e)}")
         return jsonify({"status": "API connection failed", "error": str(e)}), 500
 
+# Simple test generation endpoint for debugging
+@app.route('/test-generate', methods=['GET'])
+def test_generate():
+    """Test endpoint that returns hardcoded UI for debugging"""
+    return jsonify({
+        "html": """<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial; margin: 0; padding: 20px; }
+        h1 { color: #4338ca; }
+    </style>
+</head>
+<body>
+    <h1>Test UI</h1>
+    <p>This is a test UI to verify the preview functionality.</p>
+</body>
+</html>""",
+        "react": "function TestUI() { return <h1>Test UI</h1>; }",
+        "vue": "<template><h1>Test UI</h1></template>",
+        "angular": "<h1>Test UI</h1>"
+    })
+
 # Generate UI and code endpoint
 @app.route('/generate', methods=['POST'])
 def generate():
@@ -119,27 +142,106 @@ def generate():
         
         # Send request to OpenAI
         try:
-            response = client.chat.completions.create(
-                model=model_id,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                response_format={"type": "json_object"},
-                max_tokens=4000
-            )
+            # Some API implementations might not support response_format
+            # Try first with response_format
+            try:
+                response = client.chat.completions.create(
+                    model=model_id,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    response_format={"type": "json_object"},
+                    max_tokens=4000
+                )
+            except Exception as format_error:
+                logger.warning(f"Response format parameter failed, trying without it: {str(format_error)}")
+                # If it fails, try without response_format
+                response = client.chat.completions.create(
+                    model=model_id,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    max_tokens=4000
+                )
+                
             logger.info("Received response from OpenAI API")
             
             # Extract the JSON content from the response
-            content = response.choices[0].message.content
-            
-            # Parse the response
             try:
-                result = json.loads(content)
-                return jsonify(result)
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse JSON response: {e}")
-                return jsonify({'error': 'Invalid JSON response from API'}), 500
+                content = response.choices[0].message.content
+                logger.debug(f"Content sample: {content[:100]}...")
+                
+                # Sometimes the API might return content with markdown code blocks
+                # Try to extract JSON from markdown if needed
+                if content.strip().startswith("```json") or content.strip().startswith("```"):
+                    import re
+                    match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
+                    if match:
+                        content = match.group(1)
+                        logger.info("Extracted JSON from markdown code block")
+                
+                # Parse the response
+                try:
+                    result = json.loads(content)
+                    
+                    # Ensure all required fields exist
+                    required_fields = ["html", "react", "vue", "angular"]
+                    missing_fields = [field for field in required_fields if field not in result]
+                    
+                    if missing_fields:
+                        logger.warning(f"Missing fields in response: {missing_fields}")
+                        # Add empty placeholders for missing fields
+                        for field in missing_fields:
+                            result[field] = f"// {field.capitalize()} code could not be generated"
+                    
+                    # Make sure HTML includes doctype if not present
+                    if "html" in result and not result["html"].lower().startswith("<!doctype"):
+                        result["html"] = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+{result["html"]}
+</body>
+</html>"""
+                    
+                    return jsonify(result)
+                except json.JSONDecodeError as json_err:
+                    logger.error(f"Failed to parse JSON: {json_err}")
+                    # Attempt to fix common JSON syntax errors
+                    fixed_content = content.replace("'", '"').replace('\n', '\\n')
+                    try:
+                        result = json.loads(fixed_content)
+                        logger.info("Fixed JSON parsing issue")
+                        return jsonify(result)
+                    except:
+                        # As a last resort, return a minimal working UI
+                        logger.error("Could not fix JSON, returning minimal UI")
+                        return jsonify({
+                            "html": f"""<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial; margin: 0; padding: 20px; }}
+        h1 {{ color: #4338ca; }}
+    </style>
+</head>
+<body>
+    <h1>{prompt}</h1>
+    <p>The UI could not be generated correctly. Please try again with different parameters.</p>
+</body>
+</html>""",
+                            "react": "function UI() { return <h1>UI Generation Error</h1>; }",
+                            "vue": "<template><h1>UI Generation Error</h1></template>",
+                            "angular": "<h1>UI Generation Error</h1>"
+                        })
+            except Exception as e:
+                logger.error(f"Error processing content: {str(e)}")
+                return jsonify({'error': f'Content processing failed: {str(e)}'}), 500
                 
         except Exception as e:
             logger.error(f"Error calling OpenAI API: {str(e)}")
