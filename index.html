@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Codepilot AI</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --secondary: #f8fafc;
+            --text: #334155;
+            --bg: #ffffff;
+            --border: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        body {
+            background-color: var(--secondary);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        header {
+            background-color: var(--bg);
+            padding: 1rem 2rem;
+            box-shadow: var(--shadow);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+
+        .logo span {
+            color: var(--text);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            flex: 1;
+        }
+
+        .prompt-section {
+            background-color: var(--bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: var(--shadow);
+        }
+
+        .prompt-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .prompt-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .sample-prompts {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .sample-prompt {
+            background-color: var(--secondary);
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            font-size: 0.875rem;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            transition: all 0.2s ease;
+        }
+
+        .sample-prompt:hover {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .prompt-input {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        textarea {
+            flex: 1;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border);
+            font-size: 1rem;
+            resize: vertical;
+            min-height: 60px;
+            outline: none;
+            transition: border 0.2s ease;
+        }
+
+        textarea:focus {
+            border-color: var(--primary);
+        }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            padding: 0 1.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .device-toggle {
+            display: flex;
+            gap: 0.5rem;
+            background-color: var(--secondary);
+            padding: 0.25rem;
+            border-radius: 0.5rem;
+            width: fit-content;
+        }
+
+        .device-btn {
+            background-color: transparent;
+            color: var(--text);
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+        }
+
+        .device-btn.active {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .results-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .result-section {
+            background-color: var(--bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .result-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .copy-btn {
+            background-color: transparent;
+            color: var(--primary);
+            padding: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .ui-preview {
+            flex: 1;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            overflow: hidden;
+            background-color: var(--secondary);
+            position: relative;
+        }
+
+        .ui-container {
+            height: 100%;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+
+        .ui-container.desktop {
+            width: 100%;
+            height: 100%;
+        }
+
+        .ui-container.tablet {
+            width: 768px;
+            height: 90%;
+            margin: 0 auto;
+            border-left: 10px solid #334155;
+            border-right: 10px solid #334155;
+            border-top: 20px solid #334155;
+            border-bottom: 20px solid #334155;
+            border-radius: 10px;
+        }
+
+        .ui-container.mobile {
+            width: 375px;
+            height: 80%;
+            margin: 0 auto;
+            border-left: 10px solid #334155;
+            border-right: 10px solid #334155;
+            border-top: 20px solid #334155;
+            border-bottom: 20px solid #334155;
+            border-radius: 20px;
+        }
+
+        .code-preview {
+            flex: 1;
+            background-color: #1e293b;
+            border-radius: 0.5rem;
+            overflow: auto;
+            color: #e2e8f0;
+            padding: 1rem;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.875rem;
+            height: 500px;
+            white-space: pre-wrap;
+        }
+
+        .iframe-container {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            width: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            position: absolute;
+            top: 0;
+            left: 0;
+            visibility: hidden;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .loading.active {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(99, 102, 241, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--primary);
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .tab {
+            padding: 0.5rem 1rem;
+            background-color: var(--secondary);
+            border-radius: 0.5rem 0.5rem 0 0;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            border: 1px solid var(--border);
+            border-bottom: none;
+        }
+
+        .tab.active {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .status-bar {
+            padding: 0.5rem 1rem;
+            background-color: #f1f5f9;
+            border-radius: 0.25rem;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+            color: #64748b;
+            display: none;
+        }
+
+        .success {
+            display: block;
+            color: #047857;
+            background-color: #ecfdf5;
+        }
+
+        .error {
+            display: block;
+            color: #b91c1c;
+            background-color: #fef2f2;
+        }
+
+        @media (max-width: 1200px) {
+            .results-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .prompt-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path>
+                <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path>
+                <path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path>
+            </svg>
+            Codepilot <span>AI</span>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="prompt-section">
+            <div class="prompt-header">
+                <h2>Design Prompt</h2>
+                <div class="device-toggle">
+                    <button class="device-btn active" data-device="desktop">Desktop</button>
+                    <button class="device-btn" data-device="tablet">Tablet</button>
+                    <button class="device-btn" data-device="mobile">Mobile</button>
+                </div>
+            </div>
+            <div class="sample-prompts">
+                <div class="sample-prompt">E-commerce product page</div>
+                <div class="sample-prompt">Task management dashboard</div>
+                <div class="sample-prompt">Blog article layout</div>
+                <div class="sample-prompt">Contact form</div>
+                <div class="sample-prompt">User profile page</div>
+                <div class="sample-prompt">Landing page for SaaS</div>
+            </div>
+            <div class="prompt-input">
+                <textarea id="prompt-text" placeholder="Describe the UI you want to create..." rows="3"></textarea>
+                <button id="generate-btn">Generate</button>
+            </div>
+            <div class="status-bar" id="status-message"></div>
+        </div>
+
+        <div class="results-container">
+            <div class="result-section">
+                <div class="result-header">
+                    <h2>UI Preview</h2>
+                    <button class="copy-btn" id="download-ui">Download HTML</button>
+                </div>
+                <div class="ui-preview">
+                    <div class="ui-container desktop">
+                        <div class="iframe-container" id="preview-container">
+                            <div style="display: flex; justify-content: center; align-items: center; height: 100%; color: #94a3b8; font-size: 1.25rem;">
+                                Generate a UI design to see the preview
+                            </div>
+                        </div>
+                    </div>
+                    <div class="loading" id="loading-ui">
+                        <div class="spinner"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="result-section">
+                <div class="result-header">
+                    <h2>Code</h2>
+                    <div class="tabs">
+                        <div class="tab active" data-tab="html-tab">HTML</div>
+                        <div class="tab" data-tab="react-tab">React</div>
+                        <div class="tab" data-tab="vue-tab">Vue</div>
+                        <div class="tab" data-tab="angular-tab">Angular</div>
+                    </div>
+                </div>
+                <div class="tab-content active" id="html-tab">
+                    <div class="code-preview" id="html-code">
+                        <code>// HTML code will appear here</code>
+                    </div>
+                    <button class="copy-btn" id="copy-html">Copy HTML</button>
+                </div>
+                <div class="tab-content" id="react-tab">
+                    <div class="code-preview" id="react-code">
+                        <code>// React code will appear here</code>
+                    </div>
+                    <button class="copy-btn" id="copy-react">Copy React</button>
+                </div>
+                <div class="tab-content" id="vue-tab">
+                    <div class="code-preview" id="vue-code">
+                        <code>// Vue code will appear here</code>
+                    </div>
+                    <button class="copy-btn" id="copy-vue">Copy Vue</button>
+                </div>
+                <div class="tab-content" id="angular-tab">
+                    <div class="code-preview" id="angular-code">
+                        <code>// Angular code will appear here</code>
+                    </div>
+                    <button class="copy-btn" id="copy-angular">Copy Angular</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Sample prompts
+            const samplePrompts = document.querySelectorAll('.sample-prompt');
+            const promptTextarea = document.getElementById('prompt-text');
+            const generateBtn = document.getElementById('generate-btn');
+            const deviceBtns = document.querySelectorAll('.device-btn');
+            const uiContainer = document.querySelector('.ui-container');
+            const previewContainer = document.getElementById('preview-container');
+            const loadingUI = document.getElementById('loading-ui');
+            const tabs = document.querySelectorAll('.tab');
+            const tabContents = document.querySelectorAll('.tab-content');
+            const statusMessage = document.getElementById('status-message');
+            const copyBtns = document.querySelectorAll('.copy-btn[id^="copy-"]');
+            const downloadUiBtn = document.getElementById('download-ui');
+            
+            // Code previews
+            const htmlCode = document.getElementById('html-code');
+            const reactCode = document.getElementById('react-code');
+            const vueCode = document.getElementById('vue-code');
+            const angularCode = document.getElementById('angular-code');
+
+            let currentDevice = 'desktop';
+            
+            // Sample prompts
+            samplePrompts.forEach(prompt => {
+                prompt.addEventListener('click', () => {
+                    promptTextarea.value = prompt.textContent;
+                });
+            });
+            
+            // Enter key to generate
+            promptTextarea.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    generateUI();
+                }
+            });
+            
+            // Generate button
+            generateBtn.addEventListener('click', generateUI);
+            
+            // Device toggle
+            deviceBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    deviceBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    const device = btn.dataset.device;
+                    currentDevice = device;
+                    
+                    uiContainer.className = `ui-container ${device}`;
+                    
+                    // If we already have a UI, regenerate it for the new device
+                    if (promptTextarea.value.trim() !== '') {
+                        generateUI();
+                    }
+                });
+            });
+            
+            // Tabs
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    
+                    tabContents.forEach(content => content.classList.remove('active'));
+                    document.getElementById(tab.dataset.tab).classList.add('active');
+                });
+            });
+            
+            // Copy buttons
+            copyBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const codeId = btn.id.replace('copy-', '');
+                    const codeEl = document.getElementById(`${codeId}-code`);
+                    
+                    navigator.clipboard.writeText(codeEl.textContent).then(() => {
+                        const originalText = btn.textContent;
+                        btn.textContent = 'Copied!';
+                        setTimeout(() => {
+                            btn.textContent = originalText;
+                        }, 2000);
+                    });
+                });
+            });
+            
+            // Download UI button
+            downloadUiBtn.addEventListener('click', () => {
+                const htmlContent = htmlCode.textContent;
+                const blob = new Blob([htmlContent], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'ui-design.html';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+
+            // Function to generate UI
+            function generateUI() {
+                const prompt = promptTextarea.value.trim();
+                if (!prompt) {
+                    showStatus('Please enter a prompt', 'error');
+                    return;
+                }
+                
+                // Show loading
+                loadingUI.classList.add('active');
+                showStatus('Generating UI design...', 'loading');
+                
+                // Call the backend API
+                fetch('/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        device: currentDevice
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to generate UI');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Update HTML code
+                    htmlCode.textContent = data.html;
+                    
+                    // Update React code
+                    reactCode.textContent = data.react;
+                    
+                    // Update Vue code
+                    vueCode.textContent = data.vue;
+                    
+                    // Update Angular code
+                    angularCode.textContent = data.angular;
+                    
+                    // Render preview
+                    const blob = new Blob([data.html], { type: 'text/html' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    const iframe = document.createElement('iframe');
+                    iframe.src = url;
+                    
+                    // Replace existing content
+                    previewContainer.innerHTML = '';
+                    previewContainer.appendChild(iframe);
+                    
+                    showStatus('UI generated successfully!', 'success');
+                })
+                .catch(error => {
+                    console.error('Error generating UI:', error);
+                    showStatus('Error generating UI: ' + error.message, 'error');
+                })
+                .finally(() => {
+                    loadingUI.classList.remove('active');
+                });
+            }
+            
+            // Function to show status messages
+            function showStatus(message, type) {
+                statusMessage.textContent = message;
+                statusMessage.className = 'status-bar';
+                
+                if (type === 'success') {
+                    statusMessage.classList.add('success');
+                } else if (type === 'error') {
+                    statusMessage.classList.add('error');
+                }
+            }
+        });
+    </script>
+</body>
+</html>
