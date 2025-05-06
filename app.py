@@ -17,19 +17,24 @@ api_key = os.getenv("OPENAI_API_KEY")
 base_url = os.getenv("OPENAI_BASE_URL")
 model_id = os.getenv("MODEL_ID")
 
+logger.info(f"Using API URL: {base_url}")
+logger.info(f"Using Model ID: {model_id}")
+logger.info(f"API Key configured: {'Yes' if api_key else 'No'}")
+
 # Initialize OpenAI client
-client = OpenAI(api_key=api_key, base_url=base_url)
+try:
+    client = OpenAI(api_key=api_key, base_url=base_url)
+    logger.info("OpenAI client initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize OpenAI client: {str(e)}")
 
 # Configure static folder explicitly
 app = Flask(__name__, 
             static_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static'),
             template_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates'))
             
-CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all routes
-
-logger.info(f"Using API URL: {base_url}")
-logger.info(f"Using Model ID: {model_id}")
-logger.info(f"API Key configured: {'Yes' if api_key else 'No'}")
+# Enable CORS for all routes and all origins
+CORS(app, resources={r"/*": {"origins": "*"}})  
 
 # Home page 
 @app.route('/')
@@ -54,15 +59,38 @@ def test_api():
         logger.error(f"API test failed: {str(e)}")
         return jsonify({"status": "API connection failed", "error": str(e)}), 500
 
+# Sample prompts endpoint
+@app.route('/sample-prompts', methods=['GET'])
+def sample_prompts():
+    # Return a list of sample prompts
+    prompts = {
+        "E-commerce product page": "E-commerce product page with product image, details, and add to cart button",
+        "Task management dashboard": "Task management dashboard with tasks organized by status",
+        "Blog article layout": "Blog article layout with featured image, title, content and sidebar",
+        "Contact form": "Contact form with name, email, subject and message fields",
+        "User profile page": "User profile page with avatar, bio and activity feed",
+        "Landing page for SaaS": "Landing page for SaaS product with hero section, features and pricing"
+    }
+    return jsonify(prompts)
+
 # Generate UI and code endpoint
 @app.route('/generate', methods=['POST'])
 def generate():
     try:
-        data = request.json
-        logger.debug(f"Received data: {data}")
+        # Log request details
+        logger.info(f"Received /generate request: {request.method}")
+        logger.info(f"Content-Type: {request.content_type}")
         
-        prompt = data.get('prompt', '')
-        device = data.get('device', 'desktop')
+        # Handle both form data and JSON
+        if request.content_type and 'application/json' in request.content_type:
+            data = request.json
+            logger.info(f"JSON Data received: {data}")
+            prompt = data.get('prompt', '')
+            device = data.get('device', 'desktop')
+        else:
+            logger.info(f"Form Data: {request.form}")
+            prompt = request.form.get('prompt', '')
+            device = request.form.get('device', 'desktop')
         
         if not prompt:
             return jsonify({'error': 'Prompt is required'}), 400
@@ -108,6 +136,7 @@ def generate():
         
         # Send request to OpenAI
         try:
+            logger.info(f"Making API call with model: {model_id}")
             response = client.chat.completions.create(
                 model=model_id,
                 messages=[
@@ -160,9 +189,12 @@ def generate():
 </body>
 </html>"""
                     
+                    logger.info("Successfully formatted and returning result")
                     return jsonify(result)
                 except json.JSONDecodeError as json_err:
                     logger.error(f"Failed to parse JSON: {json_err}")
+                    logger.error(f"Raw content: {content}")
+                    
                     # Attempt to fix common JSON syntax errors
                     fixed_content = content.replace("'", '"').replace('\n', '\\n')
                     try:
@@ -237,6 +269,6 @@ if __name__ == '__main__':
     try:
         setup_app()
         logger.info("Starting application on port 5000")
-        app.run(debug=True, port=5000)
+        app.run(debug=True, host='0.0.0.0', port=5000)  # Added host='0.0.0.0' to make it externally visible
     except Exception as e:
         logger.critical(f"Failed to start application: {str(e)}")
