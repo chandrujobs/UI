@@ -1,8 +1,8 @@
 import streamlit as st
-import requests
-import json
 from dotenv import load_dotenv
 import os
+import requests
+from openai import OpenAI
 
 # Load environment variables
 load_dotenv()
@@ -10,112 +10,140 @@ api_key = os.getenv("OPENAI_API_KEY")
 base_url = os.getenv("OPENAI_BASE_URL")
 model_id = os.getenv("MODEL_ID")
 
-# Set page config
+# Streamlit page settings
 st.set_page_config(page_title="Codepilot API Test", layout="wide")
 st.title("🚀 Codepilot API Test")
-st.write("This app tests your Codepilot API before implementing the full UI.")
+st.caption("Test your Codepilot API connection and UI generation capabilities.")
 
-# API URL (change if your Flask app is running on a different port/host)
-API_URL = st.text_input("API URL", value="http://localhost:5000")
+# Session state defaults
+if "multi_screen_code" not in st.session_state:
+    st.session_state.multi_screen_code = []
+if "reset_triggered" not in st.session_state:
+    st.session_state.reset_triggered = False
 
-# Test API connectivity
-col1, col2 = st.columns(2)
+# Prompt templates
+prompt_library = {
+    "🔐 Login Form": "A modern login screen with logo, email/password fields, and login button. Centered on a soft background.",
+    "📦 Product Cards": "Three product cards in a row, each with image, name, price, and Add to Cart button.",
+    "📊 Dashboard Layout": "A two-column dashboard with sidebar navigation and main content area containing charts or widgets.",
+    "📝 Registration Page": "A user registration form with full name, email, password, and confirm password fields. Minimal styling.",
+    "📧 Newsletter Signup": "Centered signup form with a heading, email input, and subscribe button on a soft gradient background."
+}
+
+# Sidebar controls
+with st.sidebar:
+    st.header("🔧 API Settings")
+    api_url = st.text_input("Flask API URL", value="http://localhost:5000")
+    
+    st.header("📚 Prompt Library")
+    selected_prompt = st.selectbox("Choose a sample prompt", ["🔽 Select a prompt..."] + list(prompt_library.keys()))
+    
+    device_type = st.radio("Device Type", ["desktop", "tablet", "mobile"], horizontal=True)
+    
+    test_connection = st.button("🔄 Test API Connection")
+    
+    if st.button("🔄 Reset All"):
+        st.session_state.multi_screen_code = []
+        st.session_state.reset_triggered = True
+        st.rerun()
+
+# Test API connection
+if test_connection:
+    with st.spinner("Testing API connection..."):
+        try:
+            response = requests.get(f"{api_url}/test-api")
+            if response.status_code == 200:
+                st.sidebar.success("✅ API connection successful!")
+                st.sidebar.json(response.json())
+            else:
+                st.sidebar.error(f"❌ API connection failed with status code: {response.status_code}")
+                st.sidebar.text(response.text)
+        except Exception as e:
+            st.sidebar.error(f"❌ Error connecting to API: {str(e)}")
+
+# Handle prompt input
+if st.session_state.reset_triggered:
+    prompt_value = ""
+    st.session_state.reset_triggered = False
+else:
+    prompt_value = prompt_library.get(selected_prompt, "") if selected_prompt != "🔽 Select a prompt..." else ""
+
+# Prompt input
+st.subheader("📝 Describe the UI you want to test:")
+prompt_input = st.text_area("Prompt", value=prompt_value, key="prompt_input", height=150)
+
+# Buttons
+col1, col2 = st.columns([1, 1])
 with col1:
-    if st.button("Test API Connection"):
-        try:
-            response = requests.get(f"{API_URL}/test-api")
-            if response.status_code == 200:
-                st.success(f"API connection successful! Response: {response.json()}")
-            else:
-                st.error(f"API connection failed with status code: {response.status_code}")
-                st.error(f"Response: {response.text}")
-        except Exception as e:
-            st.error(f"Error connecting to API: {str(e)}")
-
+    generate_btn = st.button("✨ Test UI Generation", use_container_width=True)
 with col2:
-    if st.button("Get Sample Prompts"):
+    clear_btn = st.button("❌ Clear Output", use_container_width=True)
+
+# Generate UI
+if generate_btn and prompt_input.strip():
+    with st.spinner("Generating UI..."):
         try:
-            response = requests.get(f"{API_URL}/sample-prompts")
-            if response.status_code == 200:
-                prompts = response.json()
-                st.success(f"Successfully retrieved {len(prompts)} sample prompts!")
-                st.json(prompts)
-            else:
-                st.error(f"Failed to get sample prompts. Status code: {response.status_code}")
-                st.error(f"Response: {response.text}")
-        except Exception as e:
-            st.error(f"Error getting sample prompts: {str(e)}")
-
-# Test UI generation
-st.subheader("Test UI Generation")
-prompt = st.text_area("Enter a prompt", value="A simple login form with username and password fields")
-device = st.selectbox("Device", ["desktop", "tablet", "mobile"])
-
-if st.button("Generate UI"):
-    try:
-        with st.spinner("Generating UI..."):
-            payload = {
-                "prompt": prompt,
-                "device": device
+            # Prepare request data
+            request_data = {
+                "prompt": prompt_input.strip(),
+                "device": device_type
             }
             
-            # Log request details
-            st.write("### Request Details")
-            st.code(json.dumps(payload, indent=2), language="json")
+            # Log request
+            st.write("### API Request")
+            st.json(request_data)
             
-            # Make the API call
-            response = requests.post(f"{API_URL}/generate", json=payload)
-            
-            # Log response status
-            st.write(f"Response Status Code: {response.status_code}")
+            # Make API call
+            response = requests.post(f"{api_url}/generate", json=request_data)
             
             if response.status_code == 200:
-                data = response.json()
+                result = response.json()
                 
-                # Show HTML preview
-                st.write("### HTML Preview")
-                html_content = data.get("html", "")
-                if html_content:
-                    st.components.v1.html(html_content, height=500, scrolling=True)
-                else:
-                    st.warning("No HTML content received")
+                # Store HTML code
+                html_code = result.get("html", "")
+                react_code = result.get("react", "// React code not available")
+                vue_code = result.get("vue", "// Vue code not available")
+                angular_code = result.get("angular", "// Angular code not available")
                 
-                # Show framework code tabs
-                tab1, tab2, tab3, tab4 = st.tabs(["HTML", "React", "Vue", "Angular"])
+                # Add to session state
+                st.session_state.multi_screen_code = [
+                    {"html": html_code, "react": react_code, "vue": vue_code, "angular": angular_code}
+                ]
                 
-                with tab1:
-                    st.code(html_content, language="html")
-                    if st.button("Download HTML", key="download_html"):
-                        st.download_button(
-                            label="Download HTML File",
-                            data=html_content,
-                            file_name="ui_design.html",
-                            mime="text/html"
-                        )
-                
-                with tab2:
-                    react_code = data.get("react", "// No React code available")
-                    st.code(react_code, language="jsx")
-                
-                with tab3:
-                    vue_code = data.get("vue", "// No Vue code available")
-                    st.code(vue_code, language="javascript")
-                
-                with tab4:
-                    angular_code = data.get("angular", "// No Angular code available")
-                    st.code(angular_code, language="typescript")
+                st.success("✅ UI generated successfully!")
             else:
-                st.error(f"Generation failed with status code: {response.status_code}")
-                try:
-                    error_data = response.json()
-                    st.error(f"Error: {error_data.get('error', 'Unknown error')}")
-                except:
-                    st.error(f"Response: {response.text}")
-    except Exception as e:
-        st.error(f"Error during generation: {str(e)}")
+                st.error(f"❌ Error: API returned status code {response.status_code}")
+                st.text(response.text)
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
 
-# Environment variables (redacted for security)
-st.subheader("Current Environment Variables")
-st.write(f"API URL: {base_url}")
-st.write(f"Model ID: {model_id}")
-st.write(f"API Key: {'✓ Set' if api_key else '✗ Not Set'}")
+# Clear output
+if clear_btn:
+    st.session_state.multi_screen_code = []
+
+# Render output
+if st.session_state.multi_screen_code:
+    # Create tabs for different parts of the response
+    tabs = st.tabs(["🖼 UI Preview", "🔤 HTML", "⚛️ React", "🔄 Vue", "🅰️ Angular"])
+    
+    with tabs[0]:  # UI Preview
+        html_code = st.session_state.multi_screen_code[0]["html"]
+        st.components.v1.html(html_code, height=700, scrolling=True)
+        st.download_button(
+            "💾 Download HTML",
+            data=html_code,
+            file_name="ui_design.html",
+            mime="text/html"
+        )
+    
+    with tabs[1]:  # HTML
+        st.code(st.session_state.multi_screen_code[0]["html"], language="html")
+    
+    with tabs[2]:  # React
+        st.code(st.session_state.multi_screen_code[0]["react"], language="jsx")
+    
+    with tabs[3]:  # Vue
+        st.code(st.session_state.multi_screen_code[0]["vue"], language="javascript")
+    
+    with tabs[4]:  # Angular
+        st.code(st.session_state.multi_screen_code[0]["angular"], language="typescript")
