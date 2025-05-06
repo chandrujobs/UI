@@ -573,3 +573,258 @@
                     document.querySelectorAll('.sample-prompt').forEach(prompt => {
                         prompt.addEventListener('click', () => {
                             const promptText = prompt.getAttribute('data-prompt') || prompt.textContent;
+                            promptTextarea.value = promptText;
+                            debugLog(`Selected prompt: ${promptText.substring(0, 30)}...`);
+                        });
+                    });
+                })
+                .catch(error => {
+                    debugLog(`Error loading sample prompts: ${error.message}`);
+                    samplePromptsContainer.innerHTML = '<div class="sample-prompt">E-commerce product page</div>' +
+                        '<div class="sample-prompt">Task management dashboard</div>' +
+                        '<div class="sample-prompt">Blog article layout</div>' +
+                        '<div class="sample-prompt">Contact form</div>' +
+                        '<div class="sample-prompt">User profile page</div>' +
+                        '<div class="sample-prompt">Landing page for SaaS</div>';
+                    
+                    // Add event listeners to fallback prompts
+                    document.querySelectorAll('.sample-prompt').forEach(prompt => {
+                        prompt.addEventListener('click', () => {
+                            promptTextarea.value = prompt.textContent;
+                        });
+                    });
+                });
+            
+            // Enter key to generate
+            promptTextarea.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    generateUI();
+                }
+            });
+            
+            // Generate button
+            generateBtn.addEventListener('click', generateUI);
+            
+            // Device toggle
+            deviceBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    deviceBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    const device = btn.dataset.device;
+                    currentDevice = device;
+                    debugLog(`Device changed to: ${device}`);
+                    
+                    uiContainer.className = `ui-container ${device}`;
+                    
+                    // If we already have a UI, regenerate it for the new device
+                    if (promptTextarea.value.trim() !== '') {
+                        generateUI();
+                    }
+                });
+            });
+            
+            // Tabs
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    
+                    tabContents.forEach(content => content.classList.remove('active'));
+                    document.getElementById(tab.dataset.tab).classList.add('active');
+                });
+            });
+            
+            // Copy buttons
+            copyBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const codeId = btn.id.replace('copy-', '');
+                    const codeEl = document.getElementById(`${codeId}-code`);
+                    
+                    navigator.clipboard.writeText(codeEl.textContent).then(() => {
+                        const originalText = btn.textContent;
+                        btn.textContent = 'Copied!';
+                        setTimeout(() => {
+                            btn.textContent = originalText;
+                        }, 2000);
+                    });
+                });
+            });
+            
+            // Download UI button
+            downloadUiBtn.addEventListener('click', () => {
+                const htmlContent = htmlCode.textContent;
+                const blob = new Blob([htmlContent], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'ui-design.html';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+
+            // Function to show status messages
+            function showStatus(message, type) {
+                statusMessage.textContent = message;
+                statusMessage.className = 'status-bar';
+                
+                if (type === 'success') {
+                    statusMessage.classList.add('success');
+                } else if (type === 'error') {
+                    statusMessage.classList.add('error');
+                } else if (type === 'loading') {
+                    statusMessage.classList.add('loading-status');
+                }
+                
+                debugLog(`Status: ${type} - ${message}`);
+            }
+
+            // Function to generate UI
+            function generateUI() {
+                const prompt = promptTextarea.value.trim();
+                if (!prompt) {
+                    showStatus('Please enter a prompt', 'error');
+                    return;
+                }
+                
+                // Show loading
+                loadingUI.classList.add('active');
+                showStatus('Generating UI design...', 'loading');
+                
+                const requestData = {
+                    prompt: prompt,
+                    device: currentDevice
+                };
+                
+                debugLog(`Sending request to backend: ${JSON.stringify(requestData)}`);
+                
+                // Call the backend API
+                fetch('/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                })
+                .then(response => {
+                    debugLog(`Received response with status: ${response.status}`);
+                    
+                    if (!response.ok) {
+                        return response.json().then(errorData => {
+                            throw new Error(`Error ${response.status}: ${errorData.error || 'Unknown error'}`);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    debugLog(`Received data from API. HTML length: ${data.html ? data.html.length : 0}`);
+                    
+                    // Check if HTML data exists and is not undefined
+                    if (data.html && typeof data.html === 'string') {
+                        // Update HTML code
+                        htmlCode.textContent = data.html;
+                        
+                        // Update React code
+                        reactCode.textContent = data.react || "// React code not available";
+                        
+                        // Update Vue code
+                        vueCode.textContent = data.vue || "// Vue code not available";
+                        
+                        // Update Angular code
+                        angularCode.textContent = data.angular || "// Angular code not available";
+                        
+                        // Render preview with a slight delay to ensure the DOM has updated
+                        setTimeout(() => {
+                            try {
+                                // Sanitize the HTML by ensuring it has proper structure
+                                let htmlContent = data.html;
+                                if (!htmlContent.toLowerCase().includes('<!doctype html>')) {
+                                    htmlContent = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body>${htmlContent}</body></html>`;
+                                }
+                                
+                                debugLog('Creating blob and iframe for preview');
+                                
+                                // Create blob and URL
+                                const blob = new Blob([htmlContent], { type: 'text/html' });
+                                const url = URL.createObjectURL(blob);
+                                
+                                // Create iframe
+                                const iframe = document.createElement('iframe');
+                                iframe.onload = () => {
+                                    debugLog('iframe loaded successfully');
+                                };
+                                iframe.onerror = (e) => {
+                                    debugLog(`iframe error: ${e}`);
+                                    showStatus('Error rendering preview', 'error');
+                                };
+                                iframe.src = url;
+                                
+                                // Replace existing content
+                                previewContainer.innerHTML = '';
+                                previewContainer.appendChild(iframe);
+                                
+                                showStatus('UI generated successfully!', 'success');
+                            } catch (error) {
+                                debugLog(`Error rendering HTML: ${error.message}`);
+                                showStatus('Error rendering preview: ' + error.message, 'error');
+                            }
+                        }, 100);
+                    } else {
+                        debugLog(`Invalid HTML data: ${JSON.stringify(data).substring(0, 200)}...`);
+                        showStatus('Invalid HTML data received from API', 'error');
+                    }
+                })
+                .catch(error => {
+                    debugLog(`Error generating UI: ${error.message}`);
+                    showStatus('Error generating UI: ' + error.message, 'error');
+                    
+                    // Provide fallback UI for server errors
+                    htmlCode.textContent = `<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .error-container { background-color: #fef2f2; border: 1px solid #f87171; 
+                       border-radius: 8px; padding: 20px; color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <div class="error-container">
+    <h2>Error Generating UI</h2>
+    <p>${error.message}</p>
+    <p>Please try again with a different prompt or check the server logs.</p>
+  </div>
+</body>
+</html>`;
+                    
+                    reactCode.textContent = "// Error generating React code: " + error.message;
+                    vueCode.textContent = "// Error generating Vue code: " + error.message;
+                    angularCode.textContent = "// Error generating Angular code: " + error.message;
+                })
+                .finally(() => {
+                    loadingUI.classList.remove('active');
+                    debugLog('Request completed');
+                });
+            }
+            
+            // API health check on page load
+            fetch('/test-api')
+                .then(response => response.json())
+                .then(data => {
+                    debugLog(`API health check: ${data.status}`);
+                })
+                .catch(error => {
+                    debugLog(`API health check failed: ${error.message}`);
+                    showStatus('API server is not responding. Please check if the backend is running.', 'error');
+                });
+                
+            debugLog('Initialization complete');
+        });
+    </script>
+</body>
+</html>
+                            
