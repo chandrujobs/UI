@@ -1,170 +1,121 @@
+import streamlit as st
 import requests
 import json
-import os
 from dotenv import load_dotenv
-import time
+import os
 
-# Load environment variables (if needed)
+# Load environment variables
 load_dotenv()
+api_key = os.getenv("OPENAI_API_KEY")
+base_url = os.getenv("OPENAI_BASE_URL")
+model_id = os.getenv("MODEL_ID")
 
-# API endpoint (adjust if your server runs on a different port)
-BASE_URL = "http://localhost:5000"
+# Set page config
+st.set_page_config(page_title="Codepilot API Test", layout="wide")
+st.title("🚀 Codepilot API Test")
+st.write("This app tests your Codepilot API before implementing the full UI.")
 
-def test_api_connectivity():
-    """Test if the API is running and responding"""
-    print("\n=== Testing API Connectivity ===")
+# API URL (change if your Flask app is running on a different port/host)
+API_URL = st.text_input("API URL", value="http://localhost:5000")
+
+# Test API connectivity
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("Test API Connection"):
+        try:
+            response = requests.get(f"{API_URL}/test-api")
+            if response.status_code == 200:
+                st.success(f"API connection successful! Response: {response.json()}")
+            else:
+                st.error(f"API connection failed with status code: {response.status_code}")
+                st.error(f"Response: {response.text}")
+        except Exception as e:
+            st.error(f"Error connecting to API: {str(e)}")
+
+with col2:
+    if st.button("Get Sample Prompts"):
+        try:
+            response = requests.get(f"{API_URL}/sample-prompts")
+            if response.status_code == 200:
+                prompts = response.json()
+                st.success(f"Successfully retrieved {len(prompts)} sample prompts!")
+                st.json(prompts)
+            else:
+                st.error(f"Failed to get sample prompts. Status code: {response.status_code}")
+                st.error(f"Response: {response.text}")
+        except Exception as e:
+            st.error(f"Error getting sample prompts: {str(e)}")
+
+# Test UI generation
+st.subheader("Test UI Generation")
+prompt = st.text_area("Enter a prompt", value="A simple login form with username and password fields")
+device = st.selectbox("Device", ["desktop", "tablet", "mobile"])
+
+if st.button("Generate UI"):
     try:
-        response = requests.get(f"{BASE_URL}/test-api")
-        if response.status_code == 200:
-            print("✅ API is running and responding successfully!")
-            print(f"Response: {response.json()}")
-            return True
-        else:
-            print(f"❌ API responded with status code: {response.status_code}")
-            print(f"Response: {response.json()}")
-            return False
-    except requests.exceptions.ConnectionError:
-        print("❌ Could not connect to the API. Make sure the server is running.")
-        return False
-
-def test_prompt_library():
-    """Test retrieving the prompt library"""
-    print("\n=== Testing Prompt Library Endpoint ===")
-    try:
-        response = requests.get(f"{BASE_URL}/prompt-library")
-        if response.status_code == 200:
-            prompts = response.json()
-            print(f"✅ Received {len(prompts)} prompts from the library")
-            for key, value in prompts.items():
-                print(f"  - {key}: {value[:30]}...")
-            return prompts
-        else:
-            print(f"❌ Failed to get prompt library. Status: {response.status_code}")
-            return None
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        return None
-
-def test_generate_with_text():
-    """Test generating UI from a text prompt"""
-    print("\n=== Testing Generation with Text Prompt ===")
-    
-    data = {
-        "prompt": "A simple login form with username, password, and a login button",
-        "device": "desktop"
-    }
-    
-    try:
-        start_time = time.time()
-        response = requests.post(f"{BASE_URL}/generate", json=data)
-        end_time = time.time()
-        
-        if response.status_code == 200:
-            result = response.json()
-            print(f"✅ UI generated successfully in {end_time - start_time:.2f} seconds!")
+        with st.spinner("Generating UI..."):
+            payload = {
+                "prompt": prompt,
+                "device": device
+            }
             
-            # Check if all expected fields are present
-            for field in ["html", "react", "vue", "angular"]:
-                if field in result:
-                    content = result[field]
-                    print(f"  - {field.upper()}: {len(content)} characters")
-                else:
-                    print(f"  - {field.upper()}: Missing")
+            # Log request details
+            st.write("### Request Details")
+            st.code(json.dumps(payload, indent=2), language="json")
             
-            # Save the HTML to a file for testing
-            with open("test_output.html", "w") as f:
-                f.write(result["html"])
-            print("  - Saved HTML output to test_output.html")
+            # Make the API call
+            response = requests.post(f"{API_URL}/generate", json=payload)
             
-            return result
-        else:
-            print(f"❌ Generation failed with status: {response.status_code}")
-            print(f"Response: {response.json()}")
-            return None
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        return None
-
-def test_generate_with_file(file_path):
-    """Test generating UI from a file"""
-    print(f"\n=== Testing Generation with File: {file_path} ===")
-    
-    if not os.path.exists(file_path):
-        print(f"❌ File not found: {file_path}")
-        return None
-    
-    # Prepare multipart form data
-    files = {
-        'file': (os.path.basename(file_path), open(file_path, 'rb'), 
-                'application/pdf' if file_path.endswith('.pdf') else 'image/png')
-    }
-    
-    data = {
-        'prompt': '', # Empty prompt, using file only
-        'device': 'desktop',
-        'max_pages': '3',
-        'use_batching': 'true'
-    }
-    
-    try:
-        start_time = time.time()
-        response = requests.post(f"{BASE_URL}/generate", files=files, data=data)
-        end_time = time.time()
-        
-        if response.status_code == 200:
-            result = response.json()
-            print(f"✅ UI generated from file successfully in {end_time - start_time:.2f} seconds!")
+            # Log response status
+            st.write(f"Response Status Code: {response.status_code}")
             
-            # Check multi-screen results
-            if "multi_screen_html" in result:
-                screens = result["multi_screen_html"]
-                print(f"  - Generated {len(screens)} screens")
+            if response.status_code == 200:
+                data = response.json()
                 
-                # Save each screen to a file
-                for i, screen_html in enumerate(screens):
-                    filename = f"test_screen_{i+1}.html"
-                    with open(filename, "w") as f:
-                        f.write(screen_html)
-                    print(f"  - Saved screen {i+1} to {filename}")
-            
-            return result
-        else:
-            print(f"❌ File generation failed with status: {response.status_code}")
-            print(f"Response: {response.json() if response.content else 'No content'}")
-            return None
+                # Show HTML preview
+                st.write("### HTML Preview")
+                html_content = data.get("html", "")
+                if html_content:
+                    st.components.v1.html(html_content, height=500, scrolling=True)
+                else:
+                    st.warning("No HTML content received")
+                
+                # Show framework code tabs
+                tab1, tab2, tab3, tab4 = st.tabs(["HTML", "React", "Vue", "Angular"])
+                
+                with tab1:
+                    st.code(html_content, language="html")
+                    if st.button("Download HTML", key="download_html"):
+                        st.download_button(
+                            label="Download HTML File",
+                            data=html_content,
+                            file_name="ui_design.html",
+                            mime="text/html"
+                        )
+                
+                with tab2:
+                    react_code = data.get("react", "// No React code available")
+                    st.code(react_code, language="jsx")
+                
+                with tab3:
+                    vue_code = data.get("vue", "// No Vue code available")
+                    st.code(vue_code, language="javascript")
+                
+                with tab4:
+                    angular_code = data.get("angular", "// No Angular code available")
+                    st.code(angular_code, language="typescript")
+            else:
+                st.error(f"Generation failed with status code: {response.status_code}")
+                try:
+                    error_data = response.json()
+                    st.error(f"Error: {error_data.get('error', 'Unknown error')}")
+                except:
+                    st.error(f"Response: {response.text}")
     except Exception as e:
-        print(f"❌ Error: {e}")
-        return None
-    finally:
-        # Close the file
-        if 'files' in locals() and 'file' in files:
-            files['file'][1].close()
+        st.error(f"Error during generation: {str(e)}")
 
-def main():
-    """Run all tests"""
-    print("🧪 Starting API tests for Codepilot AI")
-    
-    # Test 1: API Connectivity
-    if not test_api_connectivity():
-        print("❌ API connectivity test failed. Stopping further tests.")
-        return
-    
-    # Test 2: Prompt Library
-    prompts = test_prompt_library()
-    
-    # Test 3: Generate with Text
-    result = test_generate_with_text()
-    
-    # Test 4: Generate with File (if available)
-    # Create a sample file or specify path to an existing one
-    sample_file_path = "sample.pdf"  # Replace with your actual file path
-    if os.path.exists(sample_file_path):
-        file_result = test_generate_with_file(sample_file_path)
-    else:
-        print(f"\n⚠️ Skipping file test as {sample_file_path} doesn't exist")
-        print("   To test file upload, place a sample PDF or image in the project directory")
-    
-    print("\n✨ API testing completed")
-
-if __name__ == "__main__":
-    main()
+# Environment variables (redacted for security)
+st.subheader("Current Environment Variables")
+st.write(f"API URL: {base_url}")
+st.write(f"Model ID: {model_id}")
+st.write(f"API Key: {'✓ Set' if api_key else '✗ Not Set'}")
