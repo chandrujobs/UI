@@ -178,20 +178,41 @@
                 
                 const data = await response.json();
                 
+                // Check if the result contains all required fields
+                let hasAllFields = false;
+                let missingFields = [];
+                
+                if (data.result) {
+                    const requiredFields = ['interactive_code', 'html_code', 'css_code', 'js_code', 'explanation'];
+                    missingFields = requiredFields.filter(field => !data.result[field]);
+                    hasAllFields = missingFields.length === 0;
+                }
+                
                 // Format the result for display
                 const displayResult = {
-                    status: response.ok ? 'success' : 'error',
+                    status: response.ok && hasAllFields ? 'success' : 'error',
                     statusCode: response.status,
-                    message: response.ok ? 'Generate endpoint working correctly' : 'Generate endpoint error',
-                    data: data.error ? { error: data.error } : { 
+                    message: response.ok && hasAllFields ? 
+                        'Generate endpoint working correctly with all required fields' : 
+                        'Generate endpoint issue: ' + (data.error || (missingFields.length > 0 ? `Missing fields: ${missingFields.join(', ')}` : 'Unknown error')),
+                    data: {
                         hasResult: !!data.result,
-                        resultKeys: data.result ? Object.keys(data.result) : []
+                        resultKeys: data.result ? Object.keys(data.result) : [],
+                        error: data.error || null
                     }
                 };
                 
                 results.textContent = JSON.stringify(displayResult, null, 2);
                 results.style.display = 'block';
-                results.className = 'results ' + (response.ok ? 'success' : 'error');
+                results.className = 'results ' + (displayResult.status === 'success' ? 'success' : 'error');
+                
+                // If successful, add a link to try the full app
+                if (displayResult.status === 'success') {
+                    const successMsg = document.createElement('div');
+                    successMsg.innerHTML = '<p><strong>Success!</strong> All tests passed. <a href="/">Try the full application</a></p>';
+                    successMsg.style.marginTop = '15px';
+                    results.after(successMsg);
+                }
             } catch (error) {
                 results.textContent = 'Error: ' + error.message;
                 results.style.display = 'block';
