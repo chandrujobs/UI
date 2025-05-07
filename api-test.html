@@ -1,0 +1,205 @@
+<!-- templates/api-test.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Connection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #4a6cf7;
+        }
+        .card {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        button {
+            background-color: #4a6cf7;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #3a5dd9;
+        }
+        #results {
+            white-space: pre-wrap;
+            background-color: #f1f1f1;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+            display: none;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top: 4px solid #4a6cf7;
+            width: 20px;
+            height: 20px;
+            margin-left: 10px;
+            display: inline-block;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <h1>API Connection Test</h1>
+    
+    <div class="card">
+        <h2>Test Environment Variables</h2>
+        <p>This page tests if your application can connect to the Claude API using your environment variables.</p>
+        <button id="test-env">Test Environment Variables</button>
+        <span class="spinner" id="env-spinner"></span>
+        <div id="env-results" class="results"></div>
+    </div>
+    
+    <div class="card">
+        <h2>Test API Connection</h2>
+        <p>This tests if your application can successfully connect to the Claude API.</p>
+        <button id="test-api">Test API Connection</button>
+        <span class="spinner" id="api-spinner"></span>
+        <div id="api-results" class="results"></div>
+    </div>
+    
+    <div class="card">
+        <h2>Test Generate Endpoint</h2>
+        <p>This tests if the /generate endpoint is working correctly.</p>
+        <p>Prompt: <input type="text" id="test-prompt" value="Create a simple button" style="width: 60%;"></p>
+        <button id="test-generate">Test Generate Endpoint</button>
+        <span class="spinner" id="generate-spinner"></span>
+        <div id="generate-results" class="results"></div>
+    </div>
+    
+    <div class="card">
+        <h2>Back to Main App</h2>
+        <p><a href="/">Return to CodePilot AI</a></p>
+    </div>
+
+    <script>
+        // Function to test environment variables
+        document.getElementById('test-env').addEventListener('click', async function() {
+            const spinner = document.getElementById('env-spinner');
+            const results = document.getElementById('env-results');
+            
+            spinner.style.display = 'inline-block';
+            results.style.display = 'none';
+            
+            try {
+                const response = await fetch('/test-env', {
+                    method: 'GET'
+                });
+                
+                const data = await response.json();
+                
+                results.textContent = JSON.stringify(data, null, 2);
+                results.style.display = 'block';
+                results.className = 'results ' + (data.status === 'success' ? 'success' : 'error');
+            } catch (error) {
+                results.textContent = 'Error: ' + error.message;
+                results.style.display = 'block';
+                results.className = 'results error';
+            } finally {
+                spinner.style.display = 'none';
+            }
+        });
+        
+        // Function to test API connection
+        document.getElementById('test-api').addEventListener('click', async function() {
+            const spinner = document.getElementById('api-spinner');
+            const results = document.getElementById('api-results');
+            
+            spinner.style.display = 'inline-block';
+            results.style.display = 'none';
+            
+            try {
+                const response = await fetch('/test-api', {
+                    method: 'GET'
+                });
+                
+                const data = await response.json();
+                
+                results.textContent = JSON.stringify(data, null, 2);
+                results.style.display = 'block';
+                results.className = 'results ' + (data.status === 'success' ? 'success' : 'error');
+            } catch (error) {
+                results.textContent = 'Error: ' + error.message;
+                results.style.display = 'block';
+                results.className = 'results error';
+            } finally {
+                spinner.style.display = 'none';
+            }
+        });
+        
+        // Function to test generate endpoint
+        document.getElementById('test-generate').addEventListener('click', async function() {
+            const spinner = document.getElementById('generate-spinner');
+            const results = document.getElementById('generate-results');
+            const prompt = document.getElementById('test-prompt').value;
+            
+            spinner.style.display = 'inline-block';
+            results.style.display = 'none';
+            
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ prompt: prompt })
+                });
+                
+                const data = await response.json();
+                
+                // Format the result for display
+                const displayResult = {
+                    status: response.ok ? 'success' : 'error',
+                    statusCode: response.status,
+                    message: response.ok ? 'Generate endpoint working correctly' : 'Generate endpoint error',
+                    data: data.error ? { error: data.error } : { 
+                        hasResult: !!data.result,
+                        resultKeys: data.result ? Object.keys(data.result) : []
+                    }
+                };
+                
+                results.textContent = JSON.stringify(displayResult, null, 2);
+                results.style.display = 'block';
+                results.className = 'results ' + (response.ok ? 'success' : 'error');
+            } catch (error) {
+                results.textContent = 'Error: ' + error.message;
+                results.style.display = 'block';
+                results.className = 'results error';
+            } finally {
+                spinner.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
