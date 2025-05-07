@@ -139,5 +139,49 @@ def generate_code():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/test-env', methods=['GET'])
+def test_env():
+    """Test endpoint to verify environment variables"""
+    try:
+        # Check environment variables
+        env_status = {
+            'api_key': bool(api_key),  # Don't return the actual key, just whether it exists
+            'base_url': base_url,
+            'model_id': model_id
+        }
+        
+        # Check which variables are missing
+        missing_vars = []
+        if not api_key:
+            missing_vars.append('OPENAI_API_KEY')
+        if not base_url:
+            missing_vars.append('OPENAI_BASE_URL')
+        if not model_id:
+            missing_vars.append('MODEL_ID')
+        
+        if missing_vars:
+            return jsonify({
+                'status': 'error',
+                'message': f'Missing environment variables: {", ".join(missing_vars)}',
+                'env_status': env_status
+            }), 400
+        else:
+            return jsonify({
+                'status': 'success',
+                'message': 'All required environment variables are set',
+                'env_status': env_status
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Error checking environment variables: {str(e)}'
+        }), 500
+
+@app.route('/api-test', methods=['GET'])
+def api_test_page():
+    """Render the API test page"""
+    return render_template('api-test.html')
+
 if __name__ == '__main__':
     app.run(debug=True)
