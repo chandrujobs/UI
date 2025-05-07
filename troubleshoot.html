@@ -1,0 +1,278 @@
+<!-- templates/troubleshoot.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Troubleshooting Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2 {
+            color: #4a6cf7;
+        }
+        .card {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4a6cf7;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        .code-area {
+            background-color: #f1f1f1;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .loading { display: none; margin-left: 10px; }
+    </style>
+</head>
+<body>
+    <h1>API Troubleshooting Diagnostics</h1>
+    
+    <div class="card">
+        <h2>1. Test Basic HTTP POST Request</h2>
+        <p>This test checks if your browser can make a basic JSON POST request to the server.</p>
+        <textarea id="simple-test-input">{"message": "Hello, this is a test"}</textarea>
+        <button id="run-simple-test">Run Basic POST Test</button>
+        <span class="loading" id="simple-loading">Testing...</span>
+        <div id="simple-test-result" class="code-area" style="display:none;"></div>
+    </div>
+    
+    <div class="card">
+        <h2>2. Test API Connectivity</h2>
+        <p>This test checks if your server can connect to the Claude API.</p>
+        <textarea id="api-test-input">Tell me a one-sentence joke</textarea>
+        <button id="run-api-test">Test API Connection</button>
+        <span class="loading" id="api-loading">Testing...</span>
+        <div id="api-test-result" class="code-area" style="display:none;"></div>
+    </div>
+    
+    <div class="card">
+        <h2>3. Manual Request Builder</h2>
+        <p>Use this to construct a custom request to any endpoint.</p>
+        <div style="margin-bottom: 10px;">
+            <label>URL: </label>
+            <input type="text" id="custom-url" value="/generate" style="width: 70%; padding: 5px;">
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label>Content Type: </label>
+            <select id="content-type" style="padding: 5px;">
+                <option value="application/json">application/json</option>
+                <option value="text/plain">text/plain</option>
+                <option value="application/x-www-form-urlencoded">application/x-www-form-urlencoded</option>
+            </select>
+        </div>
+        <textarea id="custom-input">{"prompt": "Create a simple button"}</textarea>
+        <button id="run-custom-test">Send Request</button>
+        <span class="loading" id="custom-loading">Sending...</span>
+        <div>
+            <h3>Request Headers:</h3>
+            <div id="request-headers" class="code-area"></div>
+            <h3>Response:</h3>
+            <div id="custom-test-result" class="code-area" style="display:none;"></div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h2>4. Debug Information</h2>
+        <p>This section shows information about your browser and environment.</p>
+        <button id="show-debug">Show Debug Info</button>
+        <div id="debug-info" class="code-area" style="display:none;"></div>
+    </div>
+
+    <script>
+        // Helper function to update result area
+        function updateResult(elementId, data, isSuccess) {
+            const element = document.getElementById(elementId);
+            element.style.display = 'block';
+            element.textContent = typeof data === 'object' ? JSON.stringify(data, null, 2) : data;
+            element.className = isSuccess ? 'code-area success' : 'code-area error';
+        }
+        
+        // 1. Simple POST test
+        document.getElementById('run-simple-test').addEventListener('click', async function() {
+            const loadingElement = document.getElementById('simple-loading');
+            loadingElement.style.display = 'inline';
+            
+            try {
+                // Get input JSON
+                const inputText = document.getElementById('simple-test-input').value;
+                let inputData;
+                
+                try {
+                    inputData = JSON.parse(inputText);
+                } catch (e) {
+                    updateResult('simple-test-result', `Invalid JSON: ${e.message}`, false);
+                    loadingElement.style.display = 'none';
+                    return;
+                }
+                
+                // Make the request
+                const response = await fetch('/simple-test', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(inputData)
+                });
+                
+                const result = await response.json();
+                updateResult('simple-test-result', result, response.ok);
+            } catch (error) {
+                updateResult('simple-test-result', `Error: ${error.message}`, false);
+            } finally {
+                loadingElement.style.display = 'none';
+            }
+        });
+        
+        // 2. API test
+        document.getElementById('run-api-test').addEventListener('click', async function() {
+            const loadingElement = document.getElementById('api-loading');
+            loadingElement.style.display = 'inline';
+            
+            try {
+                const prompt = document.getElementById('api-test-input').value;
+                
+                const response = await fetch('/api-test', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ prompt })
+                });
+                
+                const result = await response.json();
+                updateResult('api-test-result', result, response.ok);
+            } catch (error) {
+                updateResult('api-test-result', `Error: ${error.message}`, false);
+            } finally {
+                loadingElement.style.display = 'none';
+            }
+        });
+        
+        // 3. Custom request
+        document.getElementById('run-custom-test').addEventListener('click', async function() {
+            const loadingElement = document.getElementById('custom-loading');
+            loadingElement.style.display = 'inline';
+            
+            try {
+                const url = document.getElementById('custom-url').value;
+                const contentType = document.getElementById('content-type').value;
+                const inputText = document.getElementById('custom-input').value;
+                
+                // Prepare headers
+                const headers = {
+                    'Content-Type': contentType
+                };
+                
+                // Display request headers
+                document.getElementById('request-headers').textContent = JSON.stringify(headers, null, 2);
+                
+                // Prepare body based on content type
+                let body;
+                if (contentType === 'application/json') {
+                    try {
+                        // Validate JSON
+                        JSON.parse(inputText);
+                        body = inputText;
+                    } catch (e) {
+                        updateResult('custom-test-result', `Invalid JSON: ${e.message}`, false);
+                        loadingElement.style.display = 'none';
+                        return;
+                    }
+                } else if (contentType === 'application/x-www-form-urlencoded') {
+                    // For form data, assume key=value format
+                    body = inputText;
+                } else {
+                    // Plain text
+                    body = inputText;
+                }
+                
+                // Make the request
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: headers,
+                    body: body
+                });
+                
+                try {
+                    // Try to parse as JSON first
+                    const result = await response.json();
+                    updateResult('custom-test-result', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        headers: Object.fromEntries([...response.headers]),
+                        body: result
+                    }, response.ok);
+                } catch (e) {
+                    // If not JSON, get as text
+                    const textResult = await response.text();
+                    updateResult('custom-test-result', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        headers: Object.fromEntries([...response.headers]),
+                        body: textResult
+                    }, response.ok);
+                }
+            } catch (error) {
+                updateResult('custom-test-result', `Error: ${error.message}`, false);
+            } finally {
+                loadingElement.style.display = 'none';
+            }
+        });
+        
+        // 4. Debug info
+        document.getElementById('show-debug').addEventListener('click', function() {
+            const debugElement = document.getElementById('debug-info');
+            
+            const debugInfo = {
+                userAgent: navigator.userAgent,
+                platform: navigator.platform,
+                language: navigator.language,
+                cookiesEnabled: navigator.cookieEnabled,
+                screenSize: {
+                    width: window.screen.width,
+                    height: window.screen.height
+                },
+                viewportSize: {
+                    width: window.innerWidth,
+                    height: window.innerHeight
+                },
+                url: window.location.href,
+                networkType: navigator.connection ? navigator.connection.effectiveType : 'unknown'
+            };
+            
+            debugElement.textContent = JSON.stringify(debugInfo, null, 2);
+            debugElement.style.display = 'block';
+        });
+    </script>
+</body>
+</html>
