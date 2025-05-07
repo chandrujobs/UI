@@ -1,130 +1,95 @@
-// static/js/script.js
-document.addEventListener('DOMContentLoaded', function() {
-    // Elements
-    const promptForm = document.getElementById('prompt-form');
-    const promptInput = document.getElementById('prompt-input');
-    const generateBtn = document.getElementById('generate-btn');
-    const loadingSection = document.getElementById('loading-section');
-    const resultsSection = document.getElementById('results-section');
-    const uiPreview = document.getElementById('ui-preview');
-    const htmlCode = document.getElementById('html-code');
-    const cssCode = document.getElementById('css-code');
-    const jsCode = document.getElementById('js-code');
-    const explanationContent = document.getElementById('explanation-content');
+# app.py - Flask backend for CodePilot AI
+import os
+import json
+from flask import Flask, render_template, request, jsonify
+from dotenv import load_dotenv
+from openai import OpenAI
 
-    // Tab functionality
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    const tabContents = document.querySelectorAll('.tab-content');
+# Load environment variables
+load_dotenv()
+api_key = os.getenv("OPENAI_API_KEY")
+base_url = os.getenv("OPENAI_BASE_URL")
+model_id = os.getenv("MODEL_ID")
 
-    tabBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            // Remove active class from all buttons and contents
-            tabBtns.forEach(b => b.classList.remove('active'));
-            tabContents.forEach(c => c.classList.remove('active'));
-            
-            // Add active class to clicked button and corresponding content
-            btn.classList.add('active');
-            const tabId = btn.getAttribute('data-tab');
-            document.getElementById(`${tabId}-content`).classList.add('active');
-        });
-    });
+# Initialize the OpenAI client
+client = OpenAI(api_key=api_key, base_url=base_url)
 
-    // Copy button functionality
-    const copyBtns = document.querySelectorAll('.copy-btn');
+app = Flask(__name__)
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/generate', methods=['POST'])
+def generate_code():
+    prompt = request.json.get('prompt', '')
     
-    copyBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const targetId = btn.getAttribute('data-target');
-            const codeElement = document.getElementById(targetId);
-            const textToCopy = codeElement.textContent;
+    if not prompt:
+        return jsonify({'error': 'Prompt is required'}), 400
+    
+    try:
+        # Create a prompt that instructs Claude to generate both HTML/CSS/JS and the separate code
+        system_message = """
+        You are CodePilot AI, an expert UI developer. Generate:
+        1. Complete, functional HTML/CSS/JS code for an interactive UI based on the user's prompt
+        2. Separate HTML, CSS, and JavaScript code that can be copied
+
+        Format your response as a JSON with these exact keys:
+        - "interactive_code": Combined HTML/CSS/JS code ready to be rendered directly
+        - "html_code": Just the HTML component
+        - "css_code": Just the CSS component 
+        - "js_code": Just the JavaScript component
+        - "explanation": Brief explanation of how the code works
+        
+        Important formatting rules:
+        - Make sure the JSON response is properly formatted and valid
+        - The "interactive_code" must be a complete HTML document with inline CSS and JavaScript
+        - Escape all special characters in the code values
+        - Do not include any markdown code blocks or formatting in your response, just raw JSON
+        - The final response must be valid JSON that can be parsed with JSON.parse()
+        - Make sure all code is complete, working, and properly formatted
+        """
+        
+        # Call Claude API
+        response = client.chat.completions.create(
+            model=model_id,
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": f"Create an interactive UI for: {prompt}"}
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=4000
+        )
+        
+        # Extract and parse the response
+        result = response.choices[0].message.content
+        
+        # Validate that the result is valid JSON before sending it to the client
+        try:
+            # Try to parse it to validate, but send the original string to the client
+            # so they can parse it themselves
+            json_result = json.loads(result)
             
-            // Copy to clipboard
-            navigator.clipboard.writeText(textToCopy).then(() => {
-                btn.textContent = 'Copied!';
-                btn.classList.add('copied');
+            # Check for required fields
+            required_fields = ['interactive_code', 'html_code', 'css_code', 'js_code', 'explanation']
+            missing_fields = [field for field in required_fields if field not in json_result]
+            
+            if missing_fields:
+                return jsonify({
+                    'error': f'Response missing required fields: {", ".join(missing_fields)}'
+                }), 400
                 
-                // Reset button after 2 seconds
-                setTimeout(() => {
-                    btn.textContent = 'Copy';
-                    btn.classList.remove('copied');
-                }, 2000);
-            });
-        });
-    });
+            # Return the parsed JSON object directly
+            return jsonify({'result': json_result})
+            
+        except json.JSONDecodeError as e:
+            return jsonify({
+                'error': f'Invalid JSON response from AI: {str(e)}',
+                'raw_response': result
+            }), 500
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-    // Form submission
-    promptForm.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        const prompt = promptInput.value.trim();
-        if (!prompt) return;
-        
-        // Show loading, hide results
-        loadingSection.style.display = 'block';
-        resultsSection.style.display = 'none';
-        generateBtn.disabled = true;
-        
-        try {
-            const response = await fetch('/generate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ prompt }),
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to generate code');
-            }
-            
-            const data = await response.json();
-            const result = JSON.parse(data.result);
-            
-            // Update UI with generated code
-            displayResults(result);
-        } catch (error) {
-            console.error('Error:', error);
-            alert('An error occurred while generating code. Please try again.');
-        } finally {
-            loadingSection.style.display = 'none';
-            generateBtn.disabled = false;
-        }
-    });
-
-    // Function to display results
-    function displayResults(result) {
-        // Set the HTML/CSS/JS code sections
-        htmlCode.textContent = result.html_code;
-        cssCode.textContent = result.css_code;
-        jsCode.textContent = result.js_code;
-        
-        // Set the explanation
-        explanationContent.innerHTML = result.explanation;
-        
-        // Set the UI preview
-        uiPreview.innerHTML = result.interactive_code;
-        
-        // Execute any JavaScript in the preview
-        const scriptTags = uiPreview.querySelectorAll('script');
-        scriptTags.forEach(scriptTag => {
-            const newScript = document.createElement('script');
-            
-            // Copy all attributes
-            Array.from(scriptTag.attributes).forEach(attr => {
-                newScript.setAttribute(attr.name, attr.value);
-            });
-            
-            // Set the script content
-            newScript.textContent = scriptTag.textContent;
-            
-            // Replace the old script tag with the new one
-            scriptTag.parentNode.replaceChild(newScript, scriptTag);
-        });
-        
-        // Apply syntax highlighting
-        hljs.highlightAll();
-        
-        // Show results section
-        resultsSection.style.display = 'block';
-    }
-});
+if __name__ == '__main__':
+    app.run(debug=True)
