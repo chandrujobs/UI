@@ -92,6 +92,18 @@ if 'selected_prompt' not in st.session_state:
     st.session_state.selected_prompt = None
 if 'show_result' not in st.session_state:
     st.session_state.show_result = False
+if 'prompt_text' not in st.session_state:
+    st.session_state.prompt_text = ""
+
+# Helper function to clear the input
+def clear_input():
+    st.session_state.prompt_text = ""
+    st.session_state.selected_prompt = None
+
+# Function to handle the selection of a prompt from the library
+def use_prompt(prompt):
+    st.session_state.prompt_text = prompt
+    st.session_state.selected_prompt = prompt
 
 # Function to generate code from Claude
 def generate_code(prompt, framework, device):
@@ -182,6 +194,21 @@ def get_html_display(html_code):
     encoded = base64.b64encode(html_code.encode()).decode()
     return f'data:text/html;base64,{encoded}'
 
+# Function to update device and regenerate code
+def update_device(device):
+    st.session_state.current_device = device
+    # Only regenerate if there's a result
+    if 'result' in st.session_state and st.session_state.result:
+        prompt = st.session_state.result["metadata"]["prompt"]
+        framework = st.session_state.current_framework
+        with st.spinner(f"Optimizing for {device}..."):
+            result = generate_code(prompt, framework, device)
+            st.session_state.result = result
+            # Update history
+            if st.session_state.history:
+                st.session_state.history[0]['result'] = result
+                st.session_state.history[0]['device'] = device
+
 # Sidebar for settings and history
 with st.sidebar:
     st.title("CodePilot AI")
@@ -206,8 +233,7 @@ with st.sidebar:
         
         # Button to use the selected prompt
         if st.button("Use This Prompt", use_container_width=True):
-            st.session_state.selected_prompt = selected_prompt
-            st.experimental_rerun()
+            use_prompt(selected_prompt)
     
     # History section (if exists)
     if st.session_state.history:
@@ -217,37 +243,46 @@ with st.sidebar:
                 st.session_state.result = item['result']
                 st.session_state.show_result = True
                 st.session_state.current_framework = item['framework']
-                st.rerun()
+                st.session_state.current_device = item['device']
 
 # Main content area
 st.title("CodePilot AI")
 st.markdown("Transform your ideas into professional, responsive UI with multiple framework options")
 
-# Initialize prompt input
-prompt_value = st.session_state.selected_prompt if st.session_state.selected_prompt else ""
-
 # Input and generation section
 with st.container():
     with st.form("generation_form"):
         prompt = st.text_area("Describe the UI you want to create:", 
-                              value=prompt_value,
+                              value=st.session_state.prompt_text,
                               placeholder="E.g., Create a modern dashboard with sidebar navigation", 
-                              height=100)
+                              height=100,
+                              key="prompt_input")
         
         col1, col2 = st.columns(2)
         with col1:
             st.info(f"Framework: {st.session_state.current_framework}")
         with col2:
             st.info(f"Device: {st.session_state.current_device}")
-            
+        
+        # Create two columns for submit and clear buttons
+        col1, col2 = st.columns(2)    
         # Generate button
-        submitted = st.form_submit_button("Generate UI", type="primary", use_container_width=True)
+        with col1:
+            submitted = st.form_submit_button("Generate UI", type="primary", use_container_width=True)
+        
+        # Clear button
+        with col2:
+            clear_button = st.form_submit_button("Clear", use_container_width=True, 
+                                                 on_click=clear_input)
         
         if submitted:
             if not prompt:
                 st.warning("Please enter a prompt first.")
             else:
                 with st.spinner("Generating your UI and code..."):
+                    # Save the current prompt text
+                    st.session_state.prompt_text = prompt
+                    
                     # Call Claude to generate code
                     result = generate_code(
                         prompt, 
@@ -271,10 +306,6 @@ with st.container():
                     # Store result in session state
                     st.session_state.result = result
                     st.session_state.show_result = True
-                    st.session_state.selected_prompt = None  # Clear selected prompt
-                    
-                    # Reset the form
-                    st.experimental_rerun()
 
 # Display results if available
 if 'show_result' in st.session_state and st.session_state.show_result and 'result' in st.session_state:
@@ -290,19 +321,7 @@ if 'show_result' in st.session_state and st.session_state.show_result and 'resul
         
         for i, device in enumerate(DEVICES.keys()):
             if device_cols[i].button(device, key=f"device_{device}", use_container_width=True):
-                st.session_state.current_device = device
-                # Only regenerate if the device changes and there's a prompt
-                if 'result' in st.session_state and st.session_state.result:
-                    prompt = st.session_state.result["metadata"]["prompt"]
-                    framework = st.session_state.current_framework
-                    with st.spinner(f"Optimizing for {device}..."):
-                        result = generate_code(prompt, framework, device)
-                        st.session_state.result = result
-                        # Update history
-                        if st.session_state.history:
-                            st.session_state.history[0]['result'] = result
-                            st.session_state.history[0]['device'] = device
-                st.experimental_rerun()
+                update_device(device)
         
         # Create a container with the specified device dimensions
         device_dims = DEVICES[st.session_state.current_device]
