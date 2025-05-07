@@ -20,11 +20,59 @@ app = Flask(__name__)
 def index():
     return render_template('index.html')
 
+@app.route('/test-api', methods=['GET'])
+def test_api():
+    """Test endpoint to verify API connectivity"""
+    try:
+        # Print connection details for debugging
+        print(f"Testing API connection to: {base_url}")
+        print(f"Using model: {model_id}")
+        
+        # Try a simple API call
+        response = client.chat.completions.create(
+            model=model_id,
+            messages=[
+                {"role": "user", "content": "Hello, this is a test message. Please respond with 'API test successful'."}
+            ],
+            max_tokens=20
+        )
+        
+        # Get the response content
+        response_text = response.choices[0].message.content
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'API connection test successful',
+            'api_response': response_text
+        })
+        
+    except Exception as e:
+        print(f"API test error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'API connection test failed: {str(e)}'
+        }), 500
+
 @app.route('/generate', methods=['POST'])
 def generate_code():
-    prompt = request.json.get('prompt', '')
+    # Add detailed request logging
+    print(f"Request received: {request.data}")
+    
+    # Check if request has JSON content
+    if not request.is_json:
+        print("Error: Request is not JSON format")
+        return jsonify({'error': 'Request must be in JSON format'}), 400
+        
+    # Try to get the prompt from the request
+    try:
+        prompt = request.json.get('prompt', '')
+        print(f"Prompt extracted: {prompt}")
+    except Exception as e:
+        print(f"Error extracting prompt: {str(e)}")
+        return jsonify({'error': f'Invalid JSON format: {str(e)}'}), 400
     
     if not prompt:
+        print("Error: Empty prompt received")
         return jsonify({'error': 'Prompt is required'}), 400
     
     try:
