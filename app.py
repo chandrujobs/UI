@@ -82,20 +82,18 @@ def generate_code():
         1. Complete, functional HTML/CSS/JS code for an interactive UI based on the user's prompt
         2. Separate HTML, CSS, and JavaScript code that can be copied
 
-        Format your response as a JSON with these exact keys:
-        - "interactive_code": Combined HTML/CSS/JS code ready to be rendered directly
-        - "html_code": Just the HTML component
-        - "css_code": Just the CSS component 
+        Your response MUST be a valid JSON object with EXACTLY these fields (all are required):
+        - "interactive_code": A complete self-contained HTML document with inline CSS and JavaScript
+        - "html_code": Just the HTML component (without CSS and JS)
+        - "css_code": Just the CSS component
         - "js_code": Just the JavaScript component
         - "explanation": Brief explanation of how the code works
+
+        This is CRITICAL: All fields must be present in your response. Your response should be a valid, parseable JSON object.
+        The "interactive_code" field must contain a complete HTML document that includes CSS in a <style> tag and JavaScript in a <script> tag.
         
-        Important formatting rules:
-        - Make sure the JSON response is properly formatted and valid
-        - The "interactive_code" must be a complete HTML document with inline CSS and JavaScript
-        - Escape all special characters in the code values
-        - Do not include any markdown code blocks or formatting in your response, just raw JSON
-        - The final response must be valid JSON that can be parsed with JSON.parse()
-        - Make sure all code is complete, working, and properly formatted
+        DO NOT respond with markdown code blocks, just provide the raw JSON object.
+        Make sure the JSON structure is valid and all special characters are properly escaped.
         """
         
         # Call Claude API
