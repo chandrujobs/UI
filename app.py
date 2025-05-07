@@ -1,11 +1,10 @@
-# app.py - Enhanced Streamlit version of CodePilot AI
+# app.py - Fixed Streamlit version of CodePilot AI
 import os
 import json
 import streamlit as st
 from dotenv import load_dotenv
 from openai import OpenAI
 import base64
-import uuid
 from datetime import datetime
 
 # Load environment variables
@@ -34,14 +33,14 @@ FRAMEWORKS = {
     "Svelte": "Svelte components"
 }
 
-# Define device types
+# Define device types with numerical dimensions
 DEVICES = {
-    "Desktop": {"width": "100%", "height": "600px"},
-    "Tablet": {"width": "768px", "height": "600px"},
-    "Mobile": {"width": "375px", "height": "667px"}
+    "Desktop": {"width": 1200, "height": 600},
+    "Tablet": {"width": 768, "height": 600},
+    "Mobile": {"width": 375, "height": 667}
 }
 
-# Prompt library
+# Prompt library organized by categories
 PROMPT_LIBRARY = {
     "Form Components": [
         "Create a login form with email and password fields",
@@ -87,10 +86,12 @@ if 'current_framework' not in st.session_state:
     st.session_state.current_framework = "HTML/CSS/JS"
 if 'history' not in st.session_state:
     st.session_state.history = []
-if 'prompt_library_category' not in st.session_state:
-    st.session_state.prompt_library_category = None
-if 'form_submitted' not in st.session_state:
-    st.session_state.form_submitted = False
+if 'selected_prompt_category' not in st.session_state:
+    st.session_state.selected_prompt_category = None
+if 'selected_prompt' not in st.session_state:
+    st.session_state.selected_prompt = None
+if 'show_result' not in st.session_state:
+    st.session_state.show_result = False
 
 # Function to generate code from Claude
 def generate_code(prompt, framework, device):
@@ -162,8 +163,7 @@ def generate_code(prompt, framework, device):
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "prompt": prompt,
                 "framework": framework,
-                "device": device,
-                "id": str(uuid.uuid4())[:8]
+                "device": device
             }
             
             return json_result
@@ -182,130 +182,127 @@ def get_html_display(html_code):
     encoded = base64.b64encode(html_code.encode()).decode()
     return f'data:text/html;base64,{encoded}'
 
-# Sidebar with settings and history
+# Sidebar for settings and history
 with st.sidebar:
     st.title("CodePilot AI")
-    
-    # Device selection
-    st.subheader("Device Preview")
-    device_cols = st.columns(3)
-    
-    for i, device in enumerate(DEVICES.keys()):
-        if device_cols[i].button(device, key=f"btn_{device}", use_container_width=True):
-            st.session_state.current_device = device
     
     # Framework selection
     st.subheader("Framework")
     selected_framework = st.selectbox("Select Framework", list(FRAMEWORKS.keys()), index=list(FRAMEWORKS.keys()).index(st.session_state.current_framework))
     if selected_framework != st.session_state.current_framework:
         st.session_state.current_framework = selected_framework
-        if 'show_result' in st.session_state and st.session_state.show_result:
-            st.warning("Please regenerate your UI with the new framework.")
     
-    # Prompt Library
+    # Prompt Library as a dropdown
     st.subheader("Prompt Library")
-    categories = st.radio("Categories", list(PROMPT_LIBRARY.keys()))
     
-    if categories != st.session_state.prompt_library_category:
-        st.session_state.prompt_library_category = categories
+    # First dropdown for category selection
+    categories = list(PROMPT_LIBRARY.keys())
+    selected_category = st.selectbox("Select Category", categories)
     
-    # Show prompts for selected category
-    if st.session_state.prompt_library_category:
-        st.write("Sample Prompts:")
-        for prompt in PROMPT_LIBRARY[st.session_state.prompt_library_category]:
-            if st.button(prompt, key=f"prompt_{prompt}", use_container_width=True):
-                # Set this prompt in the main text area
-                st.session_state.selected_prompt = prompt
-                st.session_state.form_submitted = False
+    # Second dropdown for prompt selection within the category
+    if selected_category:
+        prompts = PROMPT_LIBRARY[selected_category]
+        selected_prompt = st.selectbox("Select Prompt", prompts)
+        
+        # Button to use the selected prompt
+        if st.button("Use This Prompt", use_container_width=True):
+            st.session_state.selected_prompt = selected_prompt
+            st.experimental_rerun()
     
-    # History section
+    # History section (if exists)
     if st.session_state.history:
         st.subheader("History")
         for idx, item in enumerate(st.session_state.history):
-            if st.button(f"{item['prompt'][:30]}... ({item['framework']})", key=f"history_{idx}", use_container_width=True):
+            if st.button(f"{item['prompt'][:30]}...", key=f"history_{idx}", use_container_width=True):
                 st.session_state.result = item['result']
                 st.session_state.show_result = True
-                st.session_state.current_device = item['device']
                 st.session_state.current_framework = item['framework']
                 st.rerun()
 
 # Main content area
-st.title("CodePilot AI Studio")
+st.title("CodePilot AI")
 st.markdown("Transform your ideas into professional, responsive UI with multiple framework options")
 
 # Initialize prompt input
-if 'selected_prompt' in st.session_state:
-    prompt_value = st.session_state.selected_prompt
-    # Clear it after using once
-    del st.session_state.selected_prompt
-else:
-    prompt_value = ""
+prompt_value = st.session_state.selected_prompt if st.session_state.selected_prompt else ""
 
-# Prompt input area
+# Input and generation section
 with st.container():
     with st.form("generation_form"):
         prompt = st.text_area("Describe the UI you want to create:", 
                               value=prompt_value,
-                              placeholder="E.g., Create a modern dashboard with sidebar navigation, analytics charts, and a data table", 
+                              placeholder="E.g., Create a modern dashboard with sidebar navigation", 
                               height=100)
         
         col1, col2 = st.columns(2)
         with col1:
-            st.info(f"Device: {st.session_state.current_device}")
-        with col2:
             st.info(f"Framework: {st.session_state.current_framework}")
+        with col2:
+            st.info(f"Device: {st.session_state.current_device}")
             
         # Generate button
         submitted = st.form_submit_button("Generate UI", type="primary", use_container_width=True)
         
         if submitted:
-            st.session_state.form_submitted = True
-
-# Handle generation
-if st.session_state.form_submitted:
-    if not prompt:
-        st.warning("Please enter a prompt first.")
-        st.session_state.form_submitted = False
-    else:
-        with st.spinner("Generating your professional UI and code..."):
-            # Call Claude to generate code
-            result = generate_code(
-                prompt, 
-                st.session_state.current_framework, 
-                st.session_state.current_device
-            )
-            
-            # Add to history
-            history_item = {
-                'prompt': prompt,
-                'framework': st.session_state.current_framework,
-                'device': st.session_state.current_device,
-                'result': result,
-                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
-            
-            # Add to history (limit to 10 items)
-            st.session_state.history.insert(0, history_item)
-            if len(st.session_state.history) > 10:
-                st.session_state.history = st.session_state.history[:10]
-            
-            # Store result in session state
-            st.session_state.result = result
-            st.session_state.show_result = True
-            st.session_state.form_submitted = False
-            
-            # Force a rerun to update the UI
-            st.rerun()
+            if not prompt:
+                st.warning("Please enter a prompt first.")
+            else:
+                with st.spinner("Generating your UI and code..."):
+                    # Call Claude to generate code
+                    result = generate_code(
+                        prompt, 
+                        st.session_state.current_framework, 
+                        st.session_state.current_device
+                    )
+                    
+                    # Add to history
+                    history_item = {
+                        'prompt': prompt,
+                        'framework': st.session_state.current_framework,
+                        'device': st.session_state.current_device,
+                        'result': result
+                    }
+                    
+                    # Add to history (limit to 10 items)
+                    st.session_state.history.insert(0, history_item)
+                    if len(st.session_state.history) > 10:
+                        st.session_state.history = st.session_state.history[:10]
+                    
+                    # Store result in session state
+                    st.session_state.result = result
+                    st.session_state.show_result = True
+                    st.session_state.selected_prompt = None  # Clear selected prompt
+                    
+                    # Reset the form
+                    st.experimental_rerun()
 
 # Display results if available
-if 'show_result' in st.session_state and st.session_state.show_result:
+if 'show_result' in st.session_state and st.session_state.show_result and 'result' in st.session_state:
     result = st.session_state.result
     
     # Create tabs for different sections
     preview_tab, code_tab, explanation_tab = st.tabs(["UI Preview", "Code", "Explanation"])
     
     with preview_tab:
-        st.subheader(f"{st.session_state.current_device} Preview")
+        # Device selection buttons in a row
+        st.subheader("Device Preview")
+        device_cols = st.columns(3)
+        
+        for i, device in enumerate(DEVICES.keys()):
+            if device_cols[i].button(device, key=f"device_{device}", use_container_width=True):
+                st.session_state.current_device = device
+                # Only regenerate if the device changes and there's a prompt
+                if 'result' in st.session_state and st.session_state.result:
+                    prompt = st.session_state.result["metadata"]["prompt"]
+                    framework = st.session_state.current_framework
+                    with st.spinner(f"Optimizing for {device}..."):
+                        result = generate_code(prompt, framework, device)
+                        st.session_state.result = result
+                        # Update history
+                        if st.session_state.history:
+                            st.session_state.history[0]['result'] = result
+                            st.session_state.history[0]['device'] = device
+                st.experimental_rerun()
         
         # Create a container with the specified device dimensions
         device_dims = DEVICES[st.session_state.current_device]
@@ -327,8 +324,8 @@ if 'show_result' in st.session_state and st.session_state.show_result:
             # Display the iframe
             st.components.v1.iframe(
                 get_html_display(result["interactive_code"]), 
-                height=int(device_dims["height"].replace("px", "")), 
-                width=device_dims["width"],
+                height=device_dims["height"],
+                width=f"{device_dims['width']}px" if st.session_state.current_device != "Desktop" else "100%",
                 scrolling=True
             )
             
@@ -367,11 +364,14 @@ if 'show_result' in st.session_state and st.session_state.show_result:
                 st.download_button("Download CSS", result["css_code"], "styles.css", "text/css")
             
             with other_tab:
-                for filename, content in result["additional_files"].items():
-                    st.subheader(filename)
-                    lang = "jsx" if filename.endswith((".jsx", ".tsx")) else "javascript"
-                    st.code(content, language=lang)
-                    st.download_button(f"Download {filename}", content, filename, "text/plain")
+                if result["additional_files"]:
+                    for filename, content in result["additional_files"].items():
+                        st.subheader(filename)
+                        lang = "jsx" if filename.endswith((".jsx", ".tsx")) else "javascript"
+                        st.code(content, language=lang)
+                        st.download_button(f"Download {filename}", content, filename, "text/plain")
+                else:
+                    st.info("No additional files for this component")
         
         elif framework == "Vue.js":
             component_tab, css_tab, other_tab = st.tabs(["Vue Component", "CSS/Styling", "Additional Files"])
@@ -385,11 +385,14 @@ if 'show_result' in st.session_state and st.session_state.show_result:
                 st.download_button("Download CSS", result["css_code"], "styles.css", "text/css")
             
             with other_tab:
-                for filename, content in result["additional_files"].items():
-                    st.subheader(filename)
-                    lang = "javascript" if filename.endswith(".js") else "html"
-                    st.code(content, language=lang)
-                    st.download_button(f"Download {filename}", content, filename, "text/plain")
+                if result["additional_files"]:
+                    for filename, content in result["additional_files"].items():
+                        st.subheader(filename)
+                        lang = "javascript" if filename.endswith(".js") else "html"
+                        st.code(content, language=lang)
+                        st.download_button(f"Download {filename}", content, filename, "text/plain")
+                else:
+                    st.info("No additional files for this component")
         
         elif framework == "Angular":
             component_tab, template_tab, css_tab, other_tab = st.tabs(["Component", "Template", "CSS/Styling", "Additional Files"])
@@ -408,11 +411,14 @@ if 'show_result' in st.session_state and st.session_state.show_result:
                 st.download_button("Download CSS", result["css_code"], "component.css", "text/css")
             
             with other_tab:
-                for filename, content in result["additional_files"].items():
-                    st.subheader(filename)
-                    lang = "typescript" if filename.endswith(".ts") else "html"
-                    st.code(content, language=lang)
-                    st.download_button(f"Download {filename}", content, filename, "text/plain")
+                if result["additional_files"]:
+                    for filename, content in result["additional_files"].items():
+                        st.subheader(filename)
+                        lang = "typescript" if filename.endswith(".ts") else "html"
+                        st.code(content, language=lang)
+                        st.download_button(f"Download {filename}", content, filename, "text/plain")
+                else:
+                    st.info("No additional files for this component")
         
         elif framework == "Svelte":
             component_tab, other_tab = st.tabs(["Svelte Component", "Additional Files"])
@@ -422,27 +428,26 @@ if 'show_result' in st.session_state and st.session_state.show_result:
                 st.download_button("Download Component", result["framework_specific_code"], "Component.svelte", "text/plain")
             
             with other_tab:
-                for filename, content in result["additional_files"].items():
-                    st.subheader(filename)
-                    lang = "javascript" if filename.endswith(".js") else "html"
-                    st.code(content, language=lang)
-                    st.download_button(f"Download {filename}", content, filename, "text/plain")
+                if result["additional_files"]:
+                    for filename, content in result["additional_files"].items():
+                        st.subheader(filename)
+                        lang = "javascript" if filename.endswith(".js") else "html"
+                        st.code(content, language=lang)
+                        st.download_button(f"Download {filename}", content, filename, "text/plain")
+                else:
+                    st.info("No additional files for this component")
         
         # Download complete code package
         st.subheader("Download Complete Code")
-        
-        # Create a JSON representation of all files
-        download_package = {
-            "metadata": result["metadata"],
-            "files": result["separate_code"],
-            "css_code": result["css_code"],
-            "framework_specific_code": result["framework_specific_code"],
-            "additional_files": result["additional_files"]
-        }
-        
         st.download_button(
-            label=f"Download Complete {framework} Package",
-            data=json.dumps(download_package, indent=2),
+            label=f"Download {framework} Package",
+            data=json.dumps({
+                "metadata": result["metadata"],
+                "files": result["separate_code"],
+                "css_code": result["css_code"],
+                "framework_specific_code": result["framework_specific_code"],
+                "additional_files": result["additional_files"]
+            }, indent=2),
             file_name=f"codepilot_{framework.lower().replace('/', '_').replace('.', '')}_package.json",
             mime="application/json",
         )
@@ -452,75 +457,17 @@ if 'show_result' in st.session_state and st.session_state.show_result:
         st.write(result["explanation"])
         
         # Framework-specific notes
-        st.subheader(f"{framework} Implementation Notes")
-        
+        st.subheader(f"{framework} Implementation Details")
         if framework == "HTML/CSS/JS":
-            st.write("""
-            This implementation uses standard HTML5, CSS3, and JavaScript ES6+. The code can be deployed by simply including
-            all three files in a directory and opening the HTML file in a browser. For production, consider minifying the
-            CSS and JavaScript files for better performance.
-            """)
+            st.info("This implementation uses standard HTML5, CSS3, and JavaScript ES6+.")
         elif framework == "React":
-            st.write("""
-            This React implementation uses functional components with hooks. To use this code:
-            1. Create a new React project (using Create React App or a similar tool)
-            2. Create a new component file and paste the component code
-            3. Import and use the component in your application
-            4. Include the CSS by creating a separate CSS file or using CSS-in-JS
-            """)
+            st.info("This React implementation uses functional components with hooks.")
         elif framework == "Vue.js":
-            st.write("""
-            This Vue.js implementation uses Vue 3 with the Composition API. To use this code:
-            1. Create a new Vue project (using Vue CLI or Vite)
-            2. Create a new .vue file and paste the component code
-            3. Import and register the component in your application
-            4. The component includes all necessary CSS in its <style> section
-            """)
+            st.info("This Vue.js implementation uses Vue 3 with the Composition API.")
         elif framework == "Angular":
-            st.write("""
-            This Angular implementation uses TypeScript and Angular's component architecture. To use this code:
-            1. Create a new Angular project (using Angular CLI)
-            2. Create a new component using ng generate component
-            3. Replace the generated files with the provided code
-            4. Import the component in your module and use it in your application
-            """)
+            st.info("This Angular implementation uses TypeScript and Angular's component architecture.")
         elif framework == "Svelte":
-            st.write("""
-            This Svelte implementation uses Svelte's reactive programming model. To use this code:
-            1. Create a new Svelte project (using degit or Vite)
-            2. Create a new .svelte file and paste the component code
-            3. Import and use the component in your application
-            4. The component includes all necessary CSS in its <style> section
-            """)
-            
-        # Device optimization notes
-        st.subheader(f"{st.session_state.current_device} Optimization")
-        
-        if st.session_state.current_device == "Desktop":
-            st.write("""
-            This implementation is optimized for desktop devices with:
-            - Wider layouts and more complex UI elements
-            - Hover effects for interactive elements
-            - Keyboard navigation support
-            - Higher resolution images and more detailed content
-            """)
-        elif st.session_state.current_device == "Tablet":
-            st.write("""
-            This implementation is optimized for tablet devices with:
-            - Touch-friendly UI elements with appropriate sizing
-            - Responsive layouts that adapt to portrait and landscape orientations
-            - Simplified navigation for touch interfaces
-            - Optimized for medium-sized screens (768px width)
-            """)
-        elif st.session_state.current_device == "Mobile":
-            st.write("""
-            This implementation is optimized for mobile devices with:
-            - Touch-first interface with larger interactive elements
-            - Simplified single-column layouts
-            - Collapsible/expandable sections to save vertical space
-            - Optimized for narrow screens (375px width)
-            - Performance optimizations for mobile browsers
-            """)
+            st.info("This Svelte implementation uses Svelte's reactive programming model.")
 
 # Add footer
 st.markdown("---")
@@ -530,93 +477,49 @@ st.markdown("""
 </footer>
 """, unsafe_allow_html=True)
 
-# Custom CSS for better styling
+# Custom CSS for cleaner UI
 st.markdown("""
 <style>
-    /* General styling */
+    /* Clean, modern UI styling */
     .main .block-container {
-        padding-top: 2rem;
+        padding-top: 1rem;
     }
     
-    /* Buttons */
     .stButton button {
-        border-radius: 6px;
-        font-weight: 600;
-        transition: all 0.2s ease;
-    }
-    
-    /* Sidebar styling */
-    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
-        gap: 0.5rem;
-    }
-    
-    /* Tabs styling */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        height: 45px;
-        white-space: pre-wrap;
-        background-color: #f0f2f6;
-        border-radius: 4px 4px 0px 0px;
-        gap: 1px;
-        padding: 10px 16px;
+        border-radius: 4px;
         font-weight: 500;
     }
     
-    .stTabs [aria-selected="true"] {
-        background-color: #4a6cf7;
-        color: white;
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 2px;
     }
     
-    /* Form styling */
-    [data-testid="stForm"] {
-        background-color: #f8f9fa;
-        padding: 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    .stTabs [data-baseweb="tab"] {
+        height: 40px;
+        border-radius: 4px 4px 0px 0px;
+        padding: 10px 16px;
     }
     
-    .stTextArea textarea {
-        border-radius: 6px;
+    [data-testid="stCodeBlock"] {
+        max-height: 500px;
     }
     
-    /* Device preview styling */
     iframe {
         border: none;
         background-color: white;
-        transition: all 0.3s ease;
     }
     
-    /* Code block styling */
-    [data-testid="stCodeBlock"] {
-        border-radius: 6px;
-        max-height: 600px;
+    /* Hide fullscreen button on iframe */
+    iframe[title] ~ button {
+        display: none;
     }
     
-    /* Headers */
-    h1, h2, h3 {
-        color: #333;
-    }
-    
-    h1 {
-        font-weight: 800;
-        color: #4a6cf7;
-    }
-    
-    h2 {
-        font-weight: 700;
-    }
-    
-    h3 {
-        font-weight: 600;
-    }
-    
-    /* Info box */
-    .stAlert {
-        border-radius: 6px;
-        padding: 2px 16px;
+    /* Better form styling */
+    [data-testid="stForm"] {
+        background-color: #f8f9fa;
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
     }
 </style>
 """, unsafe_allow_html=True)
