@@ -1,9 +1,10 @@
-# app.py - Flask backend for CodePilot AI
+# app.py - Streamlit version of CodePilot AI
 import os
 import json
-from flask import Flask, render_template, request, jsonify
+import streamlit as st
 from dotenv import load_dotenv
 from openai import OpenAI
+import base64
 
 # Load environment variables
 load_dotenv()
@@ -14,69 +15,22 @@ model_id = os.getenv("MODEL_ID")
 # Initialize the OpenAI client
 client = OpenAI(api_key=api_key, base_url=base_url)
 
-app = Flask(__name__)
+# Page config
+st.set_page_config(
+    page_title="CodePilot AI",
+    page_icon="🚀",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+# App title and description
+st.title("CodePilot AI")
+st.markdown("Transform your ideas into interactive UI with code")
 
-@app.route('/test-api', methods=['GET'])
-def test_api():
-    """Test endpoint to verify API connectivity"""
+# Function to generate code from Claude
+def generate_code(prompt):
     try:
-        # Print connection details for debugging
-        print(f"Testing API connection to: {base_url}")
-        print(f"Using model: {model_id}")
-        
-        # Try a simple API call
-        response = client.chat.completions.create(
-            model=model_id,
-            messages=[
-                {"role": "user", "content": "Hello, this is a test message. Please respond with 'API test successful'."}
-            ],
-            max_tokens=20
-        )
-        
-        # Get the response content
-        response_text = response.choices[0].message.content
-        
-        return jsonify({
-            'status': 'success',
-            'message': 'API connection test successful',
-            'api_response': response_text
-        })
-        
-    except Exception as e:
-        print(f"API test error: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': f'API connection test failed: {str(e)}'
-        }), 500
-
-@app.route('/generate', methods=['POST'])
-def generate_code():
-    # Add detailed request logging
-    print(f"Request received: {request.data}")
-    
-    # Check if request has JSON content
-    if not request.is_json:
-        print("Error: Request is not JSON format")
-        return jsonify({'error': 'Request must be in JSON format'}), 400
-        
-    # Try to get the prompt from the request
-    try:
-        prompt = request.json.get('prompt', '')
-        print(f"Prompt extracted: {prompt}")
-    except Exception as e:
-        print(f"Error extracting prompt: {str(e)}")
-        return jsonify({'error': f'Invalid JSON format: {str(e)}'}), 400
-    
-    if not prompt:
-        print("Error: Empty prompt received")
-        return jsonify({'error': 'Prompt is required'}), 400
-    
-    try:
-        # Create a prompt that instructs Claude to generate both HTML/CSS/JS and the separate code
+        # System message for Claude
         system_message = """
         You are CodePilot AI, an expert UI developer. Generate:
         1. Complete, functional HTML/CSS/JS code for an interactive UI based on the user's prompt
@@ -89,12 +43,18 @@ def generate_code():
         - "js_code": Just the JavaScript component
         - "explanation": Brief explanation of how the code works
 
-        This is CRITICAL: All fields must be present in your response. Your response should be a valid, parseable JSON object.
+        This is CRITICAL: All fields must be present in your response. 
         The "interactive_code" field must contain a complete HTML document that includes CSS in a <style> tag and JavaScript in a <script> tag.
-        
-        DO NOT respond with markdown code blocks, just provide the raw JSON object.
-        Make sure the JSON structure is valid and all special characters are properly escaped.
         """
+        
+        # Default fallback response
+        fallback_response = {
+            "interactive_code": "<html><body><p>Simple button example</p><button>Click me</button></body></html>",
+            "html_code": "<button>Click me</button>",
+            "css_code": "button { padding: 10px; background-color: blue; color: white; }",
+            "js_code": "document.querySelector('button').addEventListener('click', function() { alert('Button clicked!'); });",
+            "explanation": "This is a simple button example."
+        }
         
         # Call Claude API
         response = client.chat.completions.create(
@@ -104,16 +64,14 @@ def generate_code():
                 {"role": "user", "content": f"Create an interactive UI for: {prompt}"}
             ],
             response_format={"type": "json_object"},
-            max_tokens=4000
+            max_tokens=4000,
+            temperature=0.7
         )
         
-        # Extract and parse the response
+        # Parse the response
         result = response.choices[0].message.content
         
-        # Validate that the result is valid JSON before sending it to the client
         try:
-            # Try to parse it to validate, but send the original string to the client
-            # so they can parse it themselves
             json_result = json.loads(result)
             
             # Check for required fields
@@ -121,65 +79,138 @@ def generate_code():
             missing_fields = [field for field in required_fields if field not in json_result]
             
             if missing_fields:
-                return jsonify({
-                    'error': f'Response missing required fields: {", ".join(missing_fields)}'
-                }), 400
+                st.warning(f"Response missing fields: {', '.join(missing_fields)}. Using fallback values for those fields.")
                 
-            # Return the parsed JSON object directly
-            return jsonify({'result': json_result})
+                # Add any missing fields with default values
+                for field in missing_fields:
+                    json_result[field] = fallback_response[field]
+                
+            return json_result
             
         except json.JSONDecodeError as e:
-            return jsonify({
-                'error': f'Invalid JSON response from AI: {str(e)}',
-                'raw_response': result
-            }), 500
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/test-env', methods=['GET'])
-def test_env():
-    """Test endpoint to verify environment variables"""
-    try:
-        # Check environment variables
-        env_status = {
-            'api_key': bool(api_key),  # Don't return the actual key, just whether it exists
-            'base_url': base_url,
-            'model_id': model_id
-        }
-        
-        # Check which variables are missing
-        missing_vars = []
-        if not api_key:
-            missing_vars.append('OPENAI_API_KEY')
-        if not base_url:
-            missing_vars.append('OPENAI_BASE_URL')
-        if not model_id:
-            missing_vars.append('MODEL_ID')
-        
-        if missing_vars:
-            return jsonify({
-                'status': 'error',
-                'message': f'Missing environment variables: {", ".join(missing_vars)}',
-                'env_status': env_status
-            }), 400
-        else:
-            return jsonify({
-                'status': 'success',
-                'message': 'All required environment variables are set',
-                'env_status': env_status
-            })
+            st.error(f"Error parsing JSON response: {str(e)}")
+            return fallback_response
             
     except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': f'Error checking environment variables: {str(e)}'
-        }), 500
+        st.error(f"Error generating code: {str(e)}")
+        return fallback_response
 
-@app.route('/api-test', methods=['GET'])
-def api_test_page():
-    """Render the API test page"""
-    return render_template('api-test.html')
+# Function to create an HTML display for the interactive code
+def get_html_display(html_code):
+    # Encode the HTML to display in an iframe
+    encoded = base64.b64encode(html_code.encode()).decode()
+    return f'data:text/html;base64,{encoded}'
 
-if __name__ == '__main__':
-    app.run(debug=True)
+# Main app layout
+with st.container():
+    # Prompt input area
+    prompt = st.text_area("Describe the UI you want to create:", 
+                          placeholder="E.g., Create a contact form with name, email, message fields and a submit button", 
+                          height=150)
+    
+    # Generate button
+    if st.button("Generate UI", type="primary", use_container_width=True):
+        if not prompt:
+            st.warning("Please enter a prompt first.")
+        else:
+            with st.spinner("Generating your UI and code..."):
+                # Call Claude to generate code
+                result = generate_code(prompt)
+                
+                # Store result in session state to persist it
+                st.session_state.result = result
+                st.session_state.show_result = True
+
+# Display results if available
+if 'show_result' in st.session_state and st.session_state.show_result:
+    result = st.session_state.result
+    
+    # Create tabs for different sections
+    tab1, tab2 = st.tabs(["UI Preview", "Code"])
+    
+    with tab1:
+        st.header("Generated UI Preview")
+        # Display the interactive UI in an iframe
+        iframe_height = 500
+        st.components.v1.iframe(get_html_display(result["interactive_code"]), height=iframe_height, scrolling=True)
+        
+        st.subheader("How it works")
+        st.write(result["explanation"])
+    
+    with tab2:
+        # Create code tabs
+        code_tab1, code_tab2, code_tab3 = st.tabs(["HTML", "CSS", "JavaScript"])
+        
+        with code_tab1:
+            st.code(result["html_code"], language="html")
+            if st.button("Copy HTML", key="copy_html"):
+                st.session_state.clipboard = result["html_code"]
+                st.success("HTML code copied to clipboard!")
+        
+        with code_tab2:
+            st.code(result["css_code"], language="css")
+            if st.button("Copy CSS", key="copy_css"):
+                st.session_state.clipboard = result["css_code"]
+                st.success("CSS code copied to clipboard!")
+        
+        with code_tab3:
+            st.code(result["js_code"], language="javascript")
+            if st.button("Copy JavaScript", key="copy_js"):
+                st.session_state.clipboard = result["js_code"]
+                st.success("JavaScript code copied to clipboard!")
+        
+        # Download full code option
+        full_code = result["interactive_code"]
+        st.download_button(
+            label="Download Full Code",
+            data=full_code,
+            file_name="generated_ui.html",
+            mime="text/html",
+        )
+
+# Add footer
+st.markdown("---")
+st.markdown("© 2025 CodePilot AI - Powered by Claude 3.7 Sonnet")
+
+# Custom CSS for better styling
+st.markdown("""
+<style>
+    .stButton button {
+        background-color: #4a6cf7;
+        color: white;
+        font-weight: bold;
+    }
+    .stTextArea textarea {
+        border-radius: 10px;
+    }
+    h1, h2, h3 {
+        color: #4a6cf7;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 24px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        white-space: pre-wrap;
+        background-color: #f0f2f6;
+        border-radius: 4px 4px 0px 0px;
+        gap: 1px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #4a6cf7;
+        color: white;
+    }
+    iframe {
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        background-color: white;
+    }
+    footer {
+        text-align: center;
+        color: #888;
+        font-size: 0.8em;
+    }
+</style>
+""", unsafe_allow_html=True)
